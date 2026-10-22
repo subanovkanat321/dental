@@ -1,0 +1,17 @@
+# Профиль prod — сервер. Адрес и пароль базы — переменными окружения
+# SPRING_DATASOURCE_URL / _USERNAME / _PASSWORD.
+
+server:
+  # Приложение стоит за nginx: настоящий адрес и https берём из X-Forwarded-*
+  forward-headers-strategy: native
+
+spring:
+  docker:
+    compose:
+      enabled: false
+
+logging:
+  structured:
+    format:
+      # Логи одной строкой JSON — их удобно искать и разбирать
+      console: ecs

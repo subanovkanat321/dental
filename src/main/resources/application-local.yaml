@@ -1,0 +1,17 @@
+# Профиль local — ноутбук. Включается сам при ./mvnw spring-boot:run (pom.xml).
+#
+# База — Postgres 18 из compose.yaml: Spring Boot (spring-boot-docker-compose) поднимает
+# контейнер при старте. Подключиться из DBeaver / IntelliJ: localhost:5433, база dental,
+# логин и пароль dental. Порт 5433, а не 5432: на 5432 живёт база магазина (store).
+# Начать с чистой базы: docker compose down -v.
+
+spring:
+  docker:
+    compose:
+      # Не останавливать базу вместе с приложением
+      lifecycle-management: start-only
+
+logging:
+  level:
+    kg.dental: debug
+    org.hibernate.SQL: debug

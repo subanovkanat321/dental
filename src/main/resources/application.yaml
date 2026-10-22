@@ -1,0 +1,29 @@
+# Общие настройки для всех окружений. Отличия — в профилях (spring.profiles.active):
+#   local — ноутбук: application-local.yaml (./mvnw spring-boot:run включает его сам);
+#   prod  — сервер: application-prod.yaml (SPRING_PROFILES_ACTIVE=prod).
+# Секреты (токен бота, пароль базы) — только переменными окружения, ни в одном из этих файлов.
+
+server:
+  # На SIGTERM дописать начатые запросы и только потом выйти
+  shutdown: graceful
+
+spring:
+  application:
+    name: dental
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Схему создаёт только Flyway, Hibernate лишь сверяет с ней сущности
+      ddl-auto: validate
+
+dental:
+  # Время приёмов в базе — UTC (timestamptz), врачу и пациентам показываем по Бишкеку
+  time-zone: Asia/Bishkek
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

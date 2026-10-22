@@ -1,0 +1,19 @@
+# Локальная база (профиль Spring local). Spring Boot (spring-boot-docker-compose)
+# поднимает контейнер сам при запуске приложения. Пароль только для ноутбука.
+# Вручную: docker compose up -d postgres
+services:
+  postgres:
+    image: 'postgres:18'
+    environment:
+      - 'POSTGRES_DB=dental'
+      - 'POSTGRES_USER=dental'
+      - 'POSTGRES_PASSWORD=dental'
+    ports:
+      # Только 127.0.0.1 — база не видна другим компьютерам в Wi-Fi.
+      # 5433, чтобы не спорить за 5432 с базой магазина
+      - '127.0.0.1:${DENTAL_LOCAL_DB_PORT:-5433}:5432'
+    volumes:
+      - 'pgdata:/var/lib/postgresql'
+
+volumes:
+  pgdata:
