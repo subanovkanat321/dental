@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Запись</title>
+  <!-- Мост к Telegram: initData, тема, MainButton, BackButton -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <main id="app" aria-live="polite"></main>
+  <!-- Вне Telegram (браузер на ноутбуке) MainButton не видно — рисуем свою кнопку -->
+  <div id="main-button-fallback" hidden><button type="button"></button></div>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>

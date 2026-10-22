@@ -60,6 +60,12 @@ class InitDataAuthFilterTests {
 	}
 
 	@Test
+	void devInitDataExistsOnlyInLocalProfile() {
+		// Тесты идут без профиля local — как сервер: выдачи входа нет
+		assertThat(mvc.get().uri("/dev/init-data")).hasStatus(HttpStatus.NOT_FOUND);
+	}
+
+	@Test
 	void healthAndWebhookAreNotBehindInitData() {
 		assertThat(mvc.get().uri("/actuator/health")).hasStatusOk();
 		// У webhook своя защита — секрет в заголовке (TelegramWebhookTests)

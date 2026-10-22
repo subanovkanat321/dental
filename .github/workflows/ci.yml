@@ -31,6 +31,14 @@ jobs:
       - name: Сборка и тесты
         run: ./mvnw -B verify
 
+      # Логика Mini App без браузера: node:test встроен в Node, npm install не нужен
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Тесты Mini App (JS)
+        run: node --test 'src/test/js/*.test.js'
+
       - name: Отчёты тестов
         if: failure()
         uses: actions/upload-artifact@v4

@@ -34,6 +34,12 @@ class InitDataValidatorTests {
 	}
 
 	@Test
+	void devSignerProducesStringsTheValidatorAccepts() {
+		var now = Instant.parse("2026-10-22T08:00:00Z");
+		assertThat(validator.validate(InitDataSigner.sign(TOKEN, 42, now), now)).hasValue(42);
+	}
+
+	@Test
 	void fieldOrderDoesNotMatter() {
 		var reordered = "auth_date=1767225600&" + FIXTURE.replace("&auth_date=1767225600", "");
 		assertThat(validator.validate(reordered, SIGNED_AT)).hasValue(111);

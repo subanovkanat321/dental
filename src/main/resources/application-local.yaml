@@ -15,6 +15,13 @@ spring:
       # Не останавливать базу вместе с приложением
       lifecycle-management: start-only
 
+dental:
+  telegram:
+    # Без .env Mini App всё равно открывается в браузере: initData подписывает
+    # DevInitDataController этим токеном за пользователя 1. Бот при этом выключен (mode off)
+    bot-token: ${TELEGRAM_BOT_TOKEN:local-dev-token}
+    allowed-ids: ${ALLOWED_TELEGRAM_IDS:1}
+
 logging:
   level:
     kg.dental: debug

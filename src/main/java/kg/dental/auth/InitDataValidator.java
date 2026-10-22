@@ -116,7 +116,7 @@ public class InitDataValidator {
 		return URLDecoder.decode(value, StandardCharsets.UTF_8);
 	}
 
-	private static byte[] hmac(byte[] key, byte[] data) {
+	static byte[] hmac(byte[] key, byte[] data) {
 		try {
 			var mac = Mac.getInstance(HMAC);
 			mac.init(new SecretKeySpec(key, HMAC));
