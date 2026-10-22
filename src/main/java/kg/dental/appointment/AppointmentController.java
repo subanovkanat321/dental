@@ -41,6 +41,12 @@ class AppointmentController {
 		return service.get(id);
 	}
 
+	/** {@code /api/appointments/stats?weeks=8}: по неделям, текущая первой. */
+	@GetMapping("/stats")
+	List<WeekStats> stats(@RequestParam(defaultValue = "8") int weeks) {
+		return service.weeklyStats(Math.clamp(weeks, 1, 52));
+	}
+
 	/** Карточка пациента живёт здесь, а не в модуле пациентов: пациенты о приёмах не знают. */
 	@GetMapping("/by-patient/{patientId}")
 	PatientCard card(@PathVariable long patientId) {

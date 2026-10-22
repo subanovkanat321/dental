@@ -35,12 +35,21 @@ public class AppointmentService {
 
 	private final DentalProperties properties;
 
+	private final AppointmentStatsQuery stats;
+
 	AppointmentService(AppointmentRepository appointments, PatientService patients, Clock clock,
-			DentalProperties properties) {
+			DentalProperties properties, AppointmentStatsQuery stats) {
 		this.appointments = appointments;
 		this.patients = patients;
 		this.clock = clock;
 		this.properties = properties;
+		this.stats = stats;
+	}
+
+	/** Неявки и приёмы по неделям — сравнить с тем, что было до приложения (2–3 неявки в неделю). */
+	@Transactional(readOnly = true)
+	public List<WeekStats> weeklyStats(int weeks) {
+		return stats.weeks(weeks, clock.instant(), properties.timeZone());
 	}
 
 	/** Приёмы календарного дня по Бишкеку, включая отменённые (в «Дне» они зачёркнуты). */

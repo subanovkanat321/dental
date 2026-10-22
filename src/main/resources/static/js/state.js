@@ -161,3 +161,40 @@ export function freeSlotText(fullName, startAt, signature = '', now = new Date()
     + `в ${timeOf(startAt)}. Хотите прийти? Ответьте «да» — запишем.`;
   return signature ? `${text} ${signature}` : text;
 }
+
+// ---------- Статистика ----------
+
+/** «1–7 июн» или «25 мая – 31 мая» → «25–31 мая»; через месяц — «29 июн – 5 июл». */
+export function weekLabel(weekStart) {
+  const end = addDays(weekStart, 6);
+  const fmt = (d, opts) => new Intl.DateTimeFormat('ru-RU', { timeZone: 'UTC', ...opts })
+    .format(new Date(`${d}T00:00:00Z`)).replace('.', '');
+  const sameMonth = weekStart.slice(0, 7) === end.slice(0, 7);
+  return sameMonth
+    ? `${fmt(weekStart, { day: 'numeric' })}–${fmt(end, { day: 'numeric', month: 'short' })}`
+    : `${fmt(weekStart, { day: 'numeric', month: 'short' })} – ${fmt(end, { day: 'numeric', month: 'short' })}`;
+}
+
+/** Доля неявок среди отмеченных приёмов, % (null — отмеченных нет). */
+export function noShowPercent(week) {
+  const marked = week.done + week.noShow;
+  return marked ? Math.round((week.noShow / marked) * 100) : null;
+}
+
+/** Среднее неявок в неделю по прошедшим неделям (без текущей) — сравнить с «до приложения». */
+export function averageNoShows(weeks) {
+  const past = weeks.slice(1).filter((w) => w.booked > 0);
+  if (!past.length) return null;
+  return Math.round((past.reduce((sum, w) => sum + w.noShow, 0) / past.length) * 10) / 10;
+}
+
+/** «1 неявка», «2 неявки», «5 неявок», «1,5 неявки» (дробь — родительный падеж ед. числа). */
+export function noShowsPhrase(n) {
+  const number = String(n).replace('.', ',');
+  if (!Number.isInteger(n)) return `${number} неявки`;
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  const word = mod100 >= 11 && mod100 <= 14 ? 'неявок'
+    : mod10 === 1 ? 'неявка' : mod10 >= 2 && mod10 <= 4 ? 'неявки' : 'неявок';
+  return `${number} ${word}`;
+}

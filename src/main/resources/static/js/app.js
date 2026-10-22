@@ -4,6 +4,7 @@ import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
   reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
+  weekLabel, noShowPercent, averageNoShows, noShowsPhrase,
 } from './state.js';
 
 const tg = window.Telegram?.WebApp;
@@ -237,7 +238,7 @@ async function dayScreen(date, flashId) {
     h('div', { class: 'segments' },
       h('button', { type: 'button', 'aria-pressed': String(date === today), onclick: () => dayScreen(today) }, 'Сегодня'),
       h('button', { type: 'button', 'aria-pressed': String(date === addDays(today, 1)), onclick: () => dayScreen(addDays(today, 1)) }, 'Завтра'),
-      h('button', { type: 'button', onclick: () => patientsScreen(() => dayScreen(date)) }, 'Пациенты')));
+      h('button', { type: 'button', onclick: () => menuScreen(() => dayScreen(date)) }, 'Меню')));
 
   render(head, ...Array.from({ length: 6 }, () => h('div', { class: 'skeleton' })));
 
@@ -594,6 +595,59 @@ function timeFields({ date, time = '', duration = 30, exclude }) {
     h('div', { class: 'field' }, h('span', {}, 'Время'), errors.startAt, grid, toggle, manualBox));
   loadGrid();
   return fields;
+}
+
+// ---------- Меню ----------
+
+/** Всё, что не «День»: пациенты и лист ожидания, статистика. */
+function menuScreen(back) {
+  ++screenId;
+  hideToast();
+  mainButton.hide();
+  backButton.set(back);
+  const self = () => menuScreen(back);
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Меню'),
+    h('button', { type: 'button', class: 'btn', onclick: () => patientsScreen(self) }, 'Пациенты и лист ожидания'),
+    h('button', { type: 'button', class: 'btn', onclick: () => statsScreen(self) }, 'Статистика неявок')));
+}
+
+// ---------- Статистика ----------
+
+/** Неявки по неделям — ради этого проект: стало ли их меньше, чем 2–3 в неделю до приложения. */
+async function statsScreen(back) {
+  const id = ++screenId;
+  mainButton.hide();
+  backButton.set(back);
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Статистика'), h('div', { class: 'skeleton' })));
+  let weeks;
+  try {
+    weeks = await api('GET', '/api/appointments/stats?weeks=8');
+  } catch (e) {
+    if (id !== screenId || fatal(e)) return;
+    render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e),
+      h('button', { type: 'button', class: 'btn primary', onclick: () => statsScreen(back) }, 'Повторить'))));
+    return;
+  }
+  if (id !== screenId) return;
+  const average = averageNoShows(weeks);
+  const unmarked = weeks.reduce((sum, w) => sum + w.unmarked, 0);
+  const week = (w, i) => {
+    const percent = noShowPercent(w);
+    return h('li', { class: 'stat' },
+      h('div', { class: 'stat-head' }, h('strong', {}, weekLabel(w.weekStart)), i === 0 ? h('span', { class: 'hint' }, ' · эта неделя') : null),
+      w.booked === 0 ? h('div', { class: 'hint' }, 'приёмов не было') : [
+        h('div', { class: w.noShow > 0 ? 'tone-bad' : 'tone-ok' },
+          `Не пришли: ${w.noShow}${percent === null ? '' : ` (${percent}%)`}`),
+        h('div', { class: 'hint' }, [`приёмов ${w.booked}`, `пришли ${w.done}`, `отменено ${w.cancelled}`,
+          `напомнили ${w.reminded}`, w.unmarked ? `не отмечено ${w.unmarked}` : null].filter(Boolean).join(' · ')),
+      ]);
+  };
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Статистика'),
+    h('p', {}, average === null ? 'Через неделю здесь будет среднее неявок в неделю.'
+      : `В среднем ${noShowsPhrase(average)} в неделю. До приложения было 2–3.`),
+    // Неотмеченные портят цифры: не пришёл или пришёл — неизвестно
+    unmarked ? h('p', { class: 'tone-wait' }, `Не отмечено «пришёл / не пришёл»: ${unmarked} — без отметок неявки не посчитать.`) : null,
+    h('ul', { class: 'stats', role: 'list' }, weeks.map(week))));
 }
 
 // ---------- Пациенты ----------

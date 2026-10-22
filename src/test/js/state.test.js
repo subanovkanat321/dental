@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   rowState, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
-  dayItems, windowDuration, fitsWindow, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
+  dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
 const NOW = new Date('2099-06-01T06:00:00Z'); // 12:00 по Бишкеку
@@ -140,4 +140,24 @@ test('лист ожидания: кто помещается в окно и те
   const text = freeSlotText('Бакыт М.', '2099-06-02T03:00:00Z', '', new Date('2099-06-01T12:00:00Z'));
   assert.equal(text, 'Здравствуйте, Бакыт М.! Освободилось время у стоматолога: завтра в 09:00. '
     + 'Хотите прийти? Ответьте «да» — запишем.');
+});
+
+test('статистика: подпись недели, процент неявок, среднее по прошлым неделям', () => {
+  assert.equal(weekLabel('2099-06-01'), '1–7 июн');
+  assert.equal(weekLabel('2099-06-29'), '29 июн – 5 июл');
+  assert.equal(noShowPercent({ done: 9, noShow: 1 }), 10);
+  assert.equal(noShowPercent({ done: 0, noShow: 0 }), null);
+  const weeks = [
+    { booked: 5, noShow: 9 }, // текущая неделя не считается
+    { booked: 20, noShow: 2 },
+    { booked: 0, noShow: 0 }, // пустая неделя (отпуск) не тянет среднее вниз
+    { booked: 18, noShow: 1 },
+  ];
+  assert.equal(averageNoShows(weeks), 1.5);
+  assert.equal(averageNoShows([{ booked: 3, noShow: 1 }]), null);
+});
+
+test('склонение «неявка»', () => {
+  assert.deepEqual([0, 1, 2, 5, 11, 21, 1.5].map(noShowsPhrase),
+    ['0 неявок', '1 неявка', '2 неявки', '5 неявок', '11 неявок', '21 неявка', '1,5 неявки']);
 });
