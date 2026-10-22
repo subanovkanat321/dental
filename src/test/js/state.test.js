@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   rowState, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
+  dayItems, windowDuration,
 } from '../../main/resources/static/js/state.js';
 
 const NOW = new Date('2099-06-01T06:00:00Z'); // 12:00 по Бишкеку
@@ -67,4 +68,17 @@ test('телефон для показа и распознавание номе�
   assert.ok(looksLikePhone('0555 12'));
   assert.ok(!looksLikePhone('Айгуль'));
   assert.ok(!looksLikePhone('12'));
+});
+
+test('«День»: приёмы и окна «свободно» по времени', () => {
+  const items = dayItems(
+    [{ id: 1, startAt: '2099-06-01T05:00:00Z', endAt: '2099-06-01T05:30:00Z' }],
+    [{ start: '2099-06-01T03:00:00Z', end: '2099-06-01T05:00:00Z' }, { start: '2099-06-01T05:30:00Z', end: '2099-06-01T12:00:00Z' }],
+  );
+  assert.deepEqual(items.map((i) => (i.free ? `free ${timeOf(i.startAt)}` : `#${i.id}`)), ['free 09:00', '#1', 'free 11:30']);
+});
+
+test('длительность из окна: не больше 30 и не больше самого окна', () => {
+  assert.equal(windowDuration({ startAt: '2099-06-01T03:00:00Z', endAt: '2099-06-01T05:00:00Z' }), 30);
+  assert.equal(windowDuration({ startAt: '2099-06-01T03:00:00Z', endAt: '2099-06-01T03:15:00Z' }), 15);
 });

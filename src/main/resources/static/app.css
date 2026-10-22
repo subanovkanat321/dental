@@ -51,6 +51,9 @@ button { font: inherit; color: inherit; }
 .row.flash { animation: flash 1.5s; }
 @keyframes flash { from { background: var(--secondary-bg); } }
 .row .time { font-size: 1.18rem; }
+.row.free { min-height: 48px; color: var(--hint); }
+.row.free .time { color: var(--hint); }
+.day-note { margin-top: 6px; font-size: .88rem; }
 .row .name { overflow-wrap: anywhere; }
 .row .status { grid-column: 2; font-size: .88rem; }
 .row.struck .name, .row.struck .time { text-decoration: line-through; color: var(--hint); }
@@ -70,13 +73,17 @@ button { font: inherit; color: inherit; }
 .field { display: block; margin: 16px 0; }
 .field > span { display: block; margin-bottom: 6px; color: var(--hint); font-size: .88rem; }
 .field input { width: 100%; min-height: 48px; padding: 8px 12px; font: inherit; color: var(--text); background: var(--secondary-bg); border: 1px solid var(--separator); border-radius: 8px; }
-.error { color: var(--destructive); font-size: .88rem; margin-top: 6px; }
+.error { color: var(--destructive); font-size: .88rem; margin: 6px 0; }
 .error:empty { display: none; }
 .btn { display: block; width: 100%; min-height: 56px; margin: 8px 0; padding: 0 16px; border: 0; border-radius: 8px; background: var(--secondary-bg); text-align: left; cursor: pointer; }
 .btn.primary { background: var(--button); color: var(--button-text); text-align: center; }
 .btn.danger { color: var(--destructive); background: none; }
 .btn[aria-pressed=true] { outline: 2px solid var(--button); }
 .btn:disabled { opacity: .5; }
+/* Сетка свободного времени (DD11): по 4 в ряд, крупные цели для пальца */
+.slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
+.slot { min-height: 44px; border: 1px solid var(--separator); border-radius: 8px; background: none; cursor: pointer; }
+.slot[aria-pressed=true] { background: var(--button); color: var(--button-text); border-color: var(--button); }
 .replies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .replies .btn { text-align: center; margin: 0; }
 .danger-zone { margin-top: 24px; }

@@ -2,6 +2,8 @@ package kg.dental;
 
 import java.time.Clock;
 
+import kg.dental.appointment.WorkSchedule;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -15,6 +17,12 @@ class TimeConfig {
 	@Bean
 	Clock clock() {
 		return Clock.systemUTC();
+	}
+
+	/** Разбор WORK_HOURS / WORK_DAYS при старте: ошибка в них не даст приложению подняться. */
+	@Bean
+	WorkSchedule workSchedule(DentalProperties properties) {
+		return WorkSchedule.parse(properties.workHours(), properties.workDays());
 	}
 
 }

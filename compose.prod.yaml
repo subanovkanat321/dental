@@ -55,6 +55,9 @@ services:
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:?задайте TELEGRAM_WEBHOOK_SECRET в .env}
       ALLOWED_TELEGRAM_IDS: ${ALLOWED_TELEGRAM_IDS:?задайте ALLOWED_TELEGRAM_IDS в .env}
       CLINIC_CONTACT: ${CLINIC_CONTACT:-}
+      # Рабочие часы и дни (по Бишкеку) для «свободно» и сетки времени
+      WORK_HOURS: ${WORK_HOURS:-09:00-18:00}
+      WORK_DAYS: ${WORK_DAYS:-MON-SUN}
     # Куча 75% = 384 МБ: хватает с запасом для 5–10 запросов в минуту
     mem_limit: 512m
 

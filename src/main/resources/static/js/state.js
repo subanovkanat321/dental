@@ -78,3 +78,17 @@ export function formatPhone(digits) {
 export function looksLikePhone(text) {
   return /^[+\d\s\-()]+$/.test(text) && text.replace(/\D/g, '').length >= 3;
 }
+
+/**
+ * Строки «Дня»: приёмы и окна «свободно» (DD2) по времени начала.
+ * Окно — { free: true, startAt, endAt }; приём — как пришёл из API.
+ */
+export function dayItems(appointments, free) {
+  const windows = free.map((w) => ({ free: true, startAt: w.start, endAt: w.end }));
+  return [...appointments, ...windows].sort((x, y) => new Date(x.startAt) - new Date(y.startAt));
+}
+
+/** Нажатие на «свободно»: длительность min(30, длина окна) — окно всегда ≥ 15 минут (ER4). */
+export function windowDuration(window) {
+  return Math.min(30, minutesBetween(window.startAt, window.endAt));
+}

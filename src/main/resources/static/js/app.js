@@ -2,7 +2,7 @@
 // три экрана и десяток запросов не окупают React и node в сборке.
 import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
-  formatPhone, looksLikePhone,
+  formatPhone, looksLikePhone, dayItems, windowDuration,
 } from './state.js';
 
 const tg = window.Telegram?.WebApp;
@@ -199,8 +199,13 @@ async function dayScreen(date, flashId) {
   render(head, ...Array.from({ length: 6 }, () => h('div', { class: 'skeleton' })));
 
   let appointments;
+  let slots;
   try {
-    appointments = await api('GET', `/api/appointments?date=${date}`);
+    // Параллельно: приёмы дня и свободные окна (DD2)
+    [appointments, slots] = await Promise.all([
+      api('GET', `/api/appointments?date=${date}`),
+      api('GET', `/api/slots?date=${date}`),
+    ]);
   } catch (error) {
     if (id !== screenId || fatal(error)) return;
     render(head, h('div', { class: 'message' }, h('div', {}, errorText(error)),
@@ -209,7 +214,10 @@ async function dayScreen(date, flashId) {
   }
   if (id !== screenId) return;
 
-  if (appointments.length === 0) {
+  // Нерабочий день (WORK_DAYS): «Выходной», строк «свободно» нет — записать можно через «Другое время» (ER5)
+  if (!slots.workingDay) head.append(h('div', { class: 'hint day-note' }, 'Выходной'));
+  const items = dayItems(appointments, slots.free);
+  if (items.length === 0) {
     render(head, h('div', { class: 'message hint' }, 'На этот день записей нет'));
     return;
   }
@@ -217,8 +225,21 @@ async function dayScreen(date, flashId) {
   // На «Сегодня» выделен ближайший предстоящий приём (DD1)
   const next = date === today
     ? appointments.find((a) => a.status === 'SCHEDULED' && new Date(a.startAt) > now) : null;
-  render(head, h('ul', { class: 'rows', role: 'list' }, appointments.map((a) => row(a, a === next, a.id === flashId, now))));
+  render(head, h('ul', { class: 'rows', role: 'list' }, items.map((item) => (item.free
+    ? freeRow(date, item) : row(item, item === next, item.id === flashId, now)))));
   if (flashId) haptic('success');
+}
+
+/** «свободно 11:00–12:00»: нажатие — «Новая запись» с этим временем (DD2). */
+function freeRow(date, slot) {
+  const open = () => newScreen({ date, time: timeOf(slot.startAt), duration: windowDuration(slot) });
+  return h('li', {
+    class: 'row free', role: 'listitem', tabindex: 0, onclick: open,
+    onkeydown: (e) => e.key === 'Enter' && open(),
+    'aria-label': `Свободно с ${timeOf(slot.startAt)} до ${timeOf(slot.endAt)}, записать`,
+  },
+  h('span', { class: 'time' }, timeOf(slot.startAt)),
+  h('span', { class: 'hint' }, `свободно до ${timeOf(slot.endAt)}`));
 }
 
 function row(a, isNext, flash, now) {
@@ -334,8 +355,9 @@ async function reload(id) {
 function rescheduleScreen(a) {
   ++screenId;
   backButton.set(() => cardScreen(a));
+  // exclude: старое время переносимого приёма в сетке считается свободным (ER4)
   const form = timeFields({
-    date: dateOf(a.startAt), time: timeOf(a.startAt), duration: minutesBetween(a.startAt, a.endAt),
+    date: dateOf(a.startAt), time: timeOf(a.startAt), duration: minutesBetween(a.startAt, a.endAt), exclude: a.id,
   });
   render(h('section', { class: 'screen' }, backButton.link(),
     h('h1', {}, 'Перенести'), h('div', {}, a.patient.fullName), form.node));
@@ -356,23 +378,44 @@ function rescheduleScreen(a) {
 
 // ---------- Дата, длительность, время (запись и перенос) ----------
 
-function timeFields({ date, time = '', duration = 30 }) {
+/**
+ * Дата → длительность → сетка свободных начал с шагом 15 минут (DD11). Сетку считает сервер
+ * (/api/slots) тем же условием, что и защита базы от двойной записи. «Другое время» —
+ * ручной ввод, в том числе вне рабочих часов.
+ */
+function timeFields({ date, time = '', duration = 30, exclude }) {
   const errors = { startAt: h('div', { class: 'error', role: 'alert' }), durationMinutes: h('div', { class: 'error' }) };
-  const dateInput = h('input', { type: 'date', value: date, required: true });
-  const timeInput = h('input', { type: 'time', value: time, step: 900, required: true });
+  const dateInput = h('input', { type: 'date', value: date, required: true, onchange: () => { chosen = ''; loadGrid(); } });
+  const timeInput = h('input', { type: 'time', step: 900 });
+  const grid = h('div', { class: 'slots', role: 'group', 'aria-label': 'Свободное время' });
+  const manualBox = h('label', { class: 'field', hidden: true }, h('span', {}, 'Другое время'), timeInput);
+  const toggle = h('button', { type: 'button', class: 'link', onclick: () => setManual(!manual) }, 'Другое время');
+  let chosen = time; // выбранное в сетке 'HH:MM'
+  let manual = false;
+  let slots = null;
+  let gridSeq = 0;
+
   const fields = {
     duration,
     node: null,
-    startAt: () => toInstant(dateInput.value, timeInput.value),
     date: () => dateInput.value,
+    time: () => (manual ? timeInput.value : chosen),
+    startAt: () => toInstant(dateInput.value, fields.time()),
     validate() {
-      errors.startAt.textContent = dateInput.value && timeInput.value ? '' : 'Выберите дату и время';
+      errors.startAt.textContent = dateInput.value && fields.time() ? '' : 'Выберите время';
       return !errors.startAt.textContent;
     },
-    /** 409 «Время занято» — под полем времени (DD5); 422 — под своим полем. */
+    /** 409 «Время занято» — под сеткой, и сетка обновляется (DD5, DD11); 422 — под своим полем. */
     showError(e) {
       haptic('error');
-      if (e.code === 'time-taken') { errors.startAt.textContent = e.message; return true; }
+      if (e.code === 'time-taken') {
+        errors.startAt.textContent = e.message;
+        // Время ввели вручную и оно занято — вернуть сетку: выбирать дальше удобнее из свободного
+        if (manual) setManual(false);
+        chosen = '';
+        loadGrid({ keepError: true });
+        return true;
+      }
       const f = e instanceof ApiError ? e.fields : {};
       if (f.startAt || f.durationMinutes) {
         errors.startAt.textContent = f.startAt || '';
@@ -383,24 +426,76 @@ function timeFields({ date, time = '', duration = 30 }) {
       return true;
     },
   };
+
+  function setManual(on) {
+    manual = on;
+    manualBox.hidden = !on;
+    toggle.textContent = on ? 'Выбрать свободное время' : 'Другое время';
+    if (on && !timeInput.value) timeInput.value = chosen;
+    drawGrid();
+  }
+
+  function drawGrid() {
+    if (manual || !slots) {
+      grid.replaceChildren();
+      return;
+    }
+    const starts = slots.starts.map(timeOf);
+    if (starts.length === 0) {
+      grid.replaceChildren(h('div', { class: 'hint' }, slots.workingDay ? 'Свободного времени нет' : 'Выходной'));
+      return;
+    }
+    grid.replaceChildren(...starts.map((t) => h('button', {
+      type: 'button', class: 'slot time', 'aria-pressed': String(t === chosen),
+      onclick: () => { chosen = t; errors.startAt.textContent = ''; drawGrid(); },
+    }, t)));
+  }
+
+  async function loadGrid({ keepError = false } = {}) {
+    const seq = ++gridSeq;
+    if (!keepError) errors.startAt.textContent = '';
+    grid.replaceChildren(h('div', { class: 'hint' }, 'Загрузка…'));
+    const query = `date=${dateInput.value}&duration=${fields.duration}${exclude ? `&exclude=${exclude}` : ''}`;
+    let loaded;
+    try {
+      loaded = await api('GET', `/api/slots?${query}`);
+    } catch (e) {
+      if (seq !== gridSeq || fatal(e)) return;
+      grid.replaceChildren(h('div', { class: 'error' }, errorText(e)));
+      return;
+    }
+    if (seq !== gridSeq) return; // ответ на старую дату или длительность
+    slots = loaded;
+    const free = slots.starts.map(timeOf);
+    if (chosen && !free.includes(chosen)) {
+      // Подставленное время не в сетке (вне рабочих часов или уже занято): показать его вручную
+      if (!manual && time && chosen === time) setManual(true);
+      else chosen = '';
+    }
+    drawGrid();
+  }
+
   const options = DURATIONS.includes(duration) ? DURATIONS : [...DURATIONS, duration].sort((x, y) => x - y);
   const segments = h('div', { class: 'segments', role: 'group', 'aria-label': 'Длительность' }, options.map((m) => h('button', {
     type: 'button', 'aria-pressed': String(m === duration),
     onclick: (e) => {
       fields.duration = m;
       segments.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === e.currentTarget)));
+      loadGrid(); // другая длительность — другие начала
     },
   }, String(m))));
   fields.node = h('div', {},
     h('label', { class: 'field' }, h('span', {}, 'Дата'), dateInput),
     h('div', { class: 'field' }, h('span', {}, 'Длительность, мин'), segments, errors.durationMinutes),
-    h('label', { class: 'field' }, h('span', {}, 'Время'), timeInput, errors.startAt));
+    // Ошибка над сеткой, а не под ней: сетка длинная, и «Время занято» ушло бы за край экрана
+    h('div', { class: 'field' }, h('span', {}, 'Время'), errors.startAt, grid, toggle, manualBox));
+  loadGrid();
   return fields;
 }
 
 // ---------- Новая запись ----------
 
-function newScreen({ date, time }) {
+function newScreen({ date, time, duration }) {
   const id = ++screenId;
   hideToast();
   backButton.set(() => dayScreen(date));
@@ -417,7 +512,7 @@ function newScreen({ date, time }) {
   const phoneInput = h('input', { type: 'tel', autocomplete: 'off', placeholder: '0555 123 456' });
   const nameError = h('div', { class: 'error' });
   const phoneError = h('div', { class: 'error' });
-  const form = timeFields({ date, time });
+  const form = timeFields({ date, time, duration });
 
   function drawPatient() {
     patientError.replaceChildren();

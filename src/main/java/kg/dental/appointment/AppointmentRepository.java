@@ -10,6 +10,23 @@ import org.springframework.data.jpa.repository.Query;
 interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 
 	/**
+	 * «Приём занимает время» — то же условие, что WHERE у ограничения appointment_no_overlap
+	 * в V1__init.sql. Одна константа на все запросы: если сетка свободного времени разойдётся
+	 * с базой, врач увидит «свободно» на время, которое база не даст занять.
+	 * SlotApiTests сверяет их для каждого статуса.
+	 */
+	String OCCUPIES_TIME = "a.status not in (kg.dental.appointment.AppointmentStatus.CANCELLED, "
+			+ "kg.dental.appointment.AppointmentStatus.NO_SHOW)";
+
+	/**
+	 * Занятое время, пересекающееся с [from, to). {@code excludeId} — приём, который переносят:
+	 * своё старое время ему не мешает (ER4).
+	 */
+	@Query("select new kg.dental.appointment.TimeRange(a.startAt, a.endAt) from Appointment a"
+			+ " where " + OCCUPIES_TIME + " and a.startAt < :to and a.endAt > :from and a.id <> :excludeId")
+	List<TimeRange> findBusy(Instant from, Instant to, long excludeId);
+
+	/**
 	 * Приёмы дня с пациентами одним запросом (T10). Без {@code join fetch} Hibernate
 	 * сделал бы ещё по запросу на каждого пациента — проблема «N+1».
 	 */
