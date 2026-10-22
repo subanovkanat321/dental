@@ -7,12 +7,10 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 
-import kg.dental.TestcontainersConfiguration;
+import kg.dental.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,8 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * записи. Проверяем прямым SQL, без сервисов: так видно, что держит именно база.
  * Каждый тест в своей транзакции, которая откатывается в конце.
  */
-@Import(TestcontainersConfiguration.class)
-@SpringBootTest
+@IntegrationTest
 @Transactional
 class AppointmentScheduleConstraintTests {
 

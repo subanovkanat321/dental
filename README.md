@@ -24,10 +24,32 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 полуоткрытый `[start, end)`, поэтому приёмы встык разрешены. Отменённый приём и неявка
 время не занимают.
 
+## API
+
+Ошибки — Problem Details (`application/problem+json`): 422 со списком `errors[]` под полями,
+409 с полем `code` — `time-taken` «Время занято», `stale` «Приём изменён, обновите»,
+`invalid-transition`, `duplicate-patient` «Такой пациент уже есть».
+
+| Запрос | Что делает |
+|---|---|
+| `POST /api/patients/search` `{query}` | поиск по части имени или номера (номер не в URL) |
+| `POST /api/patients` `{fullName, phone, allowDuplicate}` | новый пациент; телефон приводится к `996XXXXXXXXX` / цифрам E.164 |
+| `GET /api/appointments?date=2027-06-01` | приёмы дня по Бишкеку |
+| `GET /api/appointments/{id}` | один приём |
+| `POST /api/appointments` `{patientId, startAt, durationMinutes}` | запись, 15–240 мин |
+| `POST /api/appointments/{id}/reschedule` `{version, startAt, durationMinutes}` | перенос, сбрасывает ответ и отметку напоминания |
+| `POST /api/appointments/{id}/status` `{version, status}` | отменить, восстановить, пришёл / не пришёл |
+| `POST /api/appointments/{id}/reply` `{version, reply}` | ответ пациента |
+| `POST /api/appointments/{id}/undo` `{version, previousStatus}` | «Вернуть» после отмены или «не пришёл» |
+| `POST /api/appointments/{id}/reminder-opened` | кнопка WhatsApp нажата |
+
+**Проверки доступа пока нет** — она появится на шагах 3–4 (initData Telegram и список
+разрешённых id). До этого приложение не выкладывать на сервер.
+
 ## Этапы
 
 1. ✅ Скелет, профили, миграция V1, тесты ограничений, CI
-2. Пациенты и приёмы: REST API, 409 «Время занято», переходы статусов, undo
+2. ✅ Пациенты и приёмы: REST API, 409 «Время занято», переходы статусов, undo
 3. Telegram: webhook, проверка initData, список доступа
 4. Mini App: «День», карточка приёма, «Новая запись»
 5. Сетка свободного времени (`/api/slots`), рабочие часы

@@ -1,0 +1,192 @@
+package kg.dental.appointment;
+
+import static kg.dental.appointment.AppointmentStatus.CANCELLED;
+import static kg.dental.appointment.AppointmentStatus.DONE;
+import static kg.dental.appointment.AppointmentStatus.NO_SHOW;
+import static kg.dental.appointment.AppointmentStatus.SCHEDULED;
+
+import java.time.Duration;
+import java.time.Instant;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Version;
+import kg.dental.patient.Patient;
+import kg.dental.shared.ConflictException;
+
+/**
+ * Приём. Правила переходов статуса живут здесь, рядом с данными: сервис не может
+ * «забыть» проверку, потому что поля меняются только через эти методы (R6, D8, ER1).
+ * Пересечение по времени проверяет не этот класс, а база (appointment_no_overlap).
+ */
+@Entity
+public class Appointment {
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "patient_id")
+	private Patient patient;
+
+	@Column(nullable = false)
+	private Instant startAt;
+
+	@Column(nullable = false)
+	private Instant endAt;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private AppointmentStatus status;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private PatientReply reply;
+
+	private Instant reminderOpenedAt;
+
+	/**
+	 * Оптимистическая блокировка (D18). Hibernate добавляет к UPDATE условие
+	 * {@code where version = ?} и увеличивает номер; если строку уже изменили, обновится
+	 * ноль строк — и вместо молчаливой перезаписи будет ошибка.
+	 */
+	@Version
+	private Long version;
+
+	@Column(nullable = false, updatable = false)
+	private Instant createdAt;
+
+	protected Appointment() {
+		// для JPA
+	}
+
+	Appointment(Patient patient, Instant startAt, Duration duration, Instant createdAt) {
+		this.patient = patient;
+		this.startAt = startAt;
+		this.endAt = startAt.plus(duration);
+		this.status = SCHEDULED;
+		this.reply = PatientReply.NONE;
+		this.createdAt = createdAt;
+	}
+
+	/**
+	 * Перенос. Ответ пациента и отметка напоминания относились к старому времени —
+	 * о новом пациента нужно предупредить заново.
+	 */
+	void reschedule(Instant newStart, Duration duration) {
+		requireStatus(SCHEDULED, "Перенести можно только запланированный приём");
+		this.startAt = newStart;
+		this.endAt = newStart.plus(duration);
+		this.reply = PatientReply.NONE;
+		this.reminderOpenedAt = null;
+	}
+
+	void changeReply(PatientReply newReply) {
+		requireStatus(SCHEDULED, "Ответ пациента отмечают только у запланированного приёма");
+		this.reply = newReply;
+	}
+
+	/**
+	 * Переходы из карточки приёма:
+	 * <pre>
+	 * SCHEDULED → CANCELLED                 «Отменить приём»
+	 * SCHEDULED → DONE | NO_SHOW            «Пришёл» / «Не пришёл», только сегодня и раньше
+	 * CANCELLED → SCHEDULED                 «Восстановить»: ответ и напоминание сбрасываются
+	 * DONE ↔ NO_SHOW                        исправление ошибочной отметки
+	 * </pre>
+	 * NO_SHOW → SCHEDULED — только через {@link #undo}. Остальное — 409.
+	 *
+	 * @param startOfTomorrow начало завтрашнего дня по Бишкеку: приём раньше него уже
+	 * можно отмечать
+	 */
+	void changeStatus(AppointmentStatus target, Instant startOfTomorrow) {
+		var allowed = switch (status) {
+			case SCHEDULED -> target == CANCELLED || target == DONE || target == NO_SHOW;
+			case CANCELLED -> target == SCHEDULED;
+			case DONE -> target == NO_SHOW;
+			case NO_SHOW -> target == DONE;
+		};
+		if (!allowed) {
+			throw invalidTransition("Так изменить статус нельзя");
+		}
+		if (status == SCHEDULED && (target == DONE || target == NO_SHOW) && !startAt.isBefore(startOfTomorrow)) {
+			throw invalidTransition("Отметить «пришёл» можно только в день приёма или позже");
+		}
+		if (status == CANCELLED) {
+			this.reply = PatientReply.NONE;
+			this.reminderOpenedAt = null;
+		}
+		this.status = target;
+	}
+
+	/**
+	 * «Вернуть» на плашке после отмены или «Не пришёл» (ER1): возвращает прежний статус,
+	 * а ответ пациента и отметку напоминания оставляет как есть. В отличие от
+	 * «Восстановить», ничего не теряется: отмена и «Не пришёл» эти поля не меняют, а у
+	 * отменённого приёма их не изменить, поэтому в базе и так лежат прежние значения.
+	 * Сервер не хранит историю, но проверяет, что такой статус мог быть до этого действия.
+	 */
+	void undo(AppointmentStatus previousStatus) {
+		var possible = switch (status) {
+			case CANCELLED -> previousStatus == SCHEDULED;
+			case NO_SHOW -> previousStatus == SCHEDULED || previousStatus == DONE;
+			case SCHEDULED, DONE -> false;
+		};
+		if (!possible) {
+			throw invalidTransition("Вернуть можно только отмену приёма или отметку «не пришёл»");
+		}
+		this.status = previousStatus;
+	}
+
+	private void requireStatus(AppointmentStatus required, String message) {
+		if (status != required) {
+			throw invalidTransition(message);
+		}
+	}
+
+	private static ConflictException invalidTransition(String message) {
+		return new ConflictException(ConflictException.INVALID_TRANSITION, message);
+	}
+
+	public Long getId() {
+		return id;
+	}
+
+	public Patient getPatient() {
+		return patient;
+	}
+
+	public Instant getStartAt() {
+		return startAt;
+	}
+
+	public Instant getEndAt() {
+		return endAt;
+	}
+
+	public AppointmentStatus getStatus() {
+		return status;
+	}
+
+	public PatientReply getReply() {
+		return reply;
+	}
+
+	public Instant getReminderOpenedAt() {
+		return reminderOpenedAt;
+	}
+
+	public Long getVersion() {
+		return version;
+	}
+
+}
