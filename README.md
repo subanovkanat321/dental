@@ -84,14 +84,13 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 `compose.prod.yaml`: Postgres, приложение, nginx (https), certbot (Let's Encrypt). Наружу
 открыты только 80 и 443. Память ≈ 1 ГБ по лимитам, поэтому store перед этим выключается.
 
-### 0. Имя для https
+### 0. Адрес для https
 
-Telegram открывает Mini App только по https с настоящим сертификатом, а Let's Encrypt
-выдаёт его на имя, не на голый IP. Без своего домена — бесплатный поддомен
-[DuckDNS](https://www.duckdns.org): войти, создать, например, `dental-kanat`, в поле
-current ip указать IP сервера → имя `dental-kanat.duckdns.org`. DuckDNS есть в Public Suffix
-List, поэтому у поддомена свой лимит Let's Encrypt. (`<ip-через-дефисы>.sslip.io` работает
-без регистрации, но в этом списке его нет — лимит 50 сертификатов в неделю общий на всех.)
+Telegram открывает Mini App только по https с настоящим сертификатом. Домен не нужен:
+Let's Encrypt выдаёт сертификаты прямо на IP — `DENTAL_DOMAIN=164.92.189.88`, адрес
+`https://164.92.189.88`. Такой сертификат живёт 160 часов; certbot сам продлевает его
+на середине срока (`deploy/certbot.sh` проверяет раз в 6 ч). Появится домен — поменять
+`DENTAL_DOMAIN` и перезапустить стек.
 
 ### 1. Выключить store (только после бэкапа)
 

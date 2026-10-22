@@ -74,9 +74,10 @@ services:
       - acme:/var/www/acme:ro
     mem_limit: 64m
 
-  # Получает и продлевает сертификат Let's Encrypt (deploy/certbot.sh, как в store)
+  # Получает и продлевает сертификат Let's Encrypt (deploy/certbot.sh, как в store).
+  # 5.8: сертификаты на IP-адрес появились в certbot 5.4
   certbot:
-    image: certbot/certbot:v5.1.0
+    image: certbot/certbot:v5.8.0
     restart: unless-stopped
     depends_on:
       - nginx

@@ -16,6 +16,20 @@ esac
 webroot=/var/www/acme
 live="/etc/letsencrypt/live/$DENTAL_DOMAIN/fullchain.pem"
 
+# Без домена — сертификат прямо на IP сервера (certbot 5.4+). Let's Encrypt выдаёт их только
+# с профилем shortlived: срок 160 часов, certbot продлевает на середине срока (~80 ч), поэтому
+# проверяем чаще — раз в 6 часов. Домену — обычный сертификат на 90 дней, проверка раз в 12 ч
+case "$DENTAL_DOMAIN" in
+	*[!0-9.]*)
+		identifier="-d $DENTAL_DOMAIN"
+		check_every=43200
+		;;
+	*)
+		identifier="--preferred-profile shortlived --ip-address $DENTAL_DOMAIN"
+		check_every=21600
+		;;
+esac
+
 # Let's Encrypt проверяет домен, скачивая файл с http://<домен>/.well-known/acme-challenge/.
 # Сначала убеждаемся сами, что nginx его отдаёт: обращаться к Let's Encrypt раньше —
 # значит тратить попытки из лимита (5 неудачных проверок в час на домен)
@@ -50,14 +64,15 @@ backoff() {
 while :; do
 	if [ -f "$live" ]; then
 		# Продлевает, только если до конца срока меньше 30 дней; иначе ничего не делает
-		certbot renew --webroot -w "$webroot" --quiet && pause=43200 || pause=3600
-	elif nginx_serves_challenge && certbot certonly --webroot -w "$webroot" -d "$DENTAL_DOMAIN" \
+		certbot renew --webroot -w "$webroot" --quiet && pause="$check_every" || pause=3600
+	# $identifier без кавычек намеренно: это несколько аргументов
+	elif nginx_serves_challenge && certbot certonly --webroot -w "$webroot" $identifier \
 		--agree-tos --register-unsafely-without-email --non-interactive; then
 		# Почта необязательна: письма об истечении Let's Encrypt больше не рассылает,
 		# а продление — автоматическое
 		echo "certbot: сертификат для $DENTAL_DOMAIN получен"
 		failures=0
-		pause=43200
+		pause="$check_every"
 	else
 		failures=$((failures + 1))
 		pause="$(backoff)"
