@@ -46,3 +46,77 @@ jobs:
           name: surefire-reports
           path: target/surefire-reports/
           retention-days: 7
+
+  # Весь прод-стек из compose.prod.yaml с настоящими Dockerfile: образы собираются,
+  # nginx отдаёт приложение по https, служебные адреса закрыты, бэкап восстанавливается.
+  # DENTAL_DOMAIN=localhost: certbot не ходит в Let's Encrypt, nginx на временном сертификате
+  prod-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE: docker compose -f compose.prod.yaml --env-file .env
+      BACKUP_DIR: /tmp/dental-backups
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Прод-стек
+        run: |
+          cat > .env <<'ENV'
+          DENTAL_DOMAIN=localhost
+          POSTGRES_PASSWORD=ci-db-password
+          TELEGRAM_BOT_TOKEN=123456:ci-token
+          TELEGRAM_WEBHOOK_SECRET=ci-webhook-secret
+          TELEGRAM_MODE=off
+          ALLOWED_TELEGRAM_IDS=111
+          CLINIC_CONTACT=+996 555 000 000
+          ENV
+          $COMPOSE up -d --build
+          for _ in $(seq 1 90); do
+            if curl -kfs https://localhost/actuator/health | grep -q '"UP"'; then break; fi
+            sleep 2
+          done
+          curl -kfs https://localhost/actuator/health | grep '"UP"'
+
+      - name: Mini App, вход, webhook, закрытые адреса
+        run: |
+          code() { curl -ks -o /dev/null -w '%{http_code}' "$@"; }
+          curl -kfs https://localhost/ | grep -q '<title>Запись</title>'
+          test "$(code https://localhost/js/app.js)" = 200
+          test "$(code 'https://localhost/api/appointments?date=2026-10-23')" = 401
+          test "$(code -X POST -H 'Content-Type: application/json' -d '{}' https://localhost/telegram/webhook)" = 401
+          test "$(code -X POST -H 'X-Telegram-Bot-Api-Secret-Token: ci-webhook-secret' -H 'Content-Type: application/json' -d '{"update_id":1}' https://localhost/telegram/webhook)" = 200
+          test "$(code https://localhost/dev/init-data)" = 404
+          test "$(code https://localhost/actuator/prometheus)" = 404
+          curl -sI http://localhost/ | grep -qi '^location: https://'
+          # Приложение работает не от root
+          test "$($COMPOSE exec -T app id -u)" != "0"
+
+      - name: Заголовки безопасности
+        run: |
+          headers="$(curl -ks -D - -o /dev/null https://localhost/)"
+          echo "$headers"
+          echo "$headers" | grep -qi '^strict-transport-security:'
+          # Фрейм разрешён только Telegram Web — иначе Mini App там не откроется
+          echo "$headers" | grep -qi '^content-security-policy: frame-ancestors https://web.telegram.org'
+          if echo "$headers" | grep -qi '^x-frame-options:'; then echo "X-Frame-Options сломает Telegram Web"; exit 1; fi
+          if echo "$headers" | grep -i '^server:' | grep -q '[0-9]'; then echo "nginx показывает версию"; exit 1; fi
+
+      - name: Приложение остановлено — 503 «обновляется», а не голый 502
+        run: |
+          $COMPOSE stop app
+          test "$(curl -ks -o /dev/null -w '%{http_code}' 'https://localhost/api/appointments?date=2026-10-23')" = 503
+          curl -ks 'https://localhost/api/appointments?date=2026-10-23' | jq -e '.detail | test("обновляется")'
+          $COMPOSE start app
+
+      - name: Бэкап и проверка восстановления
+        run: |
+          $COMPOSE exec -T db psql -U dental -d dental -c \
+            "insert into patient (full_name, phone) values ('Тест', '996555000000')"
+          deploy/backup.sh
+          test "$(stat -c %a "$BACKUP_DIR"/db-*.dump)" = 600
+          deploy/verify-backup.sh | tee /tmp/verify.log
+          grep -q 'пациентов: 1' /tmp/verify.log
+
+      - name: Логи
+        if: always()
+        run: $COMPOSE logs --no-color --tail 100 || true

@@ -1,0 +1,77 @@
+# Шаблон: ${DENTAL_DOMAIN} подставляется при старте контейнера.
+
+server_tokens off;  # «Server: nginx» без версии
+
+# Docker DNS: адрес app ищем заново раз в 10 с — после пересоздания контейнера его IP меняется
+resolver 127.0.0.11 valid=10s;
+# Не ждать ответа DNS по умолчанию 30 с: врач увидит «обновляется» через секунды, а не через полминуты
+resolver_timeout 5s;
+
+server {
+    listen 80;
+    server_name _;
+
+    # Проверка Let's Encrypt: certbot кладёт сюда файл, Let's Encrypt забирает его по http
+    location /.well-known/acme-challenge/ {
+        root /var/www/acme;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DENTAL_DOMAIN};
+
+    ssl_certificate     /etc/nginx/certs/current/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/current/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # Самый большой запрос — сообщение от Telegram в webhook, это килобайты
+    client_max_body_size 1m;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json application/problem+json;
+
+    include /etc/nginx/snippets/security-headers.conf;
+
+    proxy_set_header Host $host;
+    # Подделанный клиентом X-Forwarded-For заменяется настоящим адресом, а не дописывается
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+
+    set $app http://app:8080;
+
+    # Приложение перезапускается или упало: вместо голого 502 — ответ в формате ошибок API.
+    # Mini App покажет этот текст
+    location @app_unavailable {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Retry-After 30 always;
+        default_type "application/problem+json; charset=utf-8";
+        return 503 '{"status":503,"title":"Service Unavailable","detail":"Приложение обновляется. Повторите через минуту."}';
+    }
+
+    location = /actuator/health {
+        proxy_pass $app;
+    }
+    # Остальные служебные адреса — не для интернета
+    location /actuator/ {
+        return 404;
+    }
+    # Выдача тестового входа есть только в профиле local; здесь закрыта ещё и на nginx
+    location /dev/ {
+        return 404;
+    }
+
+    # Mini App (статика), REST API и webhook Telegram — всё отдаёт приложение
+    location / {
+        proxy_pass $app;
+        error_page 502 504 = @app_unavailable;
+    }
+}

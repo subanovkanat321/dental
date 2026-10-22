@@ -78,6 +78,66 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 3. Кнопка Mini App появится только с https-адресом: туннель (например,
    `cloudflared tunnel --url http://localhost:8080`) и его адрес в `PUBLIC_URL`.
 
+## Деплой
+
+Сервер: DigitalOcean (Германия), 2 ГБ RAM, Docker уже стоит (там работал store). Стек —
+`compose.prod.yaml`: Postgres, приложение, nginx (https), certbot (Let's Encrypt). Наружу
+открыты только 80 и 443. Память ≈ 1 ГБ по лимитам, поэтому store перед этим выключается.
+
+### 0. Имя для https
+
+Telegram открывает Mini App только по https с настоящим сертификатом, а Let's Encrypt
+выдаёт его на имя, не на голый IP. Без своего домена — бесплатный поддомен
+[DuckDNS](https://www.duckdns.org): войти, создать, например, `dental-kanat`, в поле
+current ip указать IP сервера → имя `dental-kanat.duckdns.org`. DuckDNS есть в Public Suffix
+List, поэтому у поддомена свой лимит Let's Encrypt. (`<ip-через-дефисы>.sslip.io` работает
+без регистрации, но в этом списке его нет — лимит 50 сертификатов в неделю общий на всех.)
+
+### 1. Выключить store (только после бэкапа)
+
+```bash
+cd /opt/store
+deploy/backup.sh && deploy/verify-backup.sh   # свежий бэкап и проверка, что он восстанавливается
+docker compose -f compose.prod.yaml --env-file .env down   # без -v: тома с данными остаются
+```
+
+### 2. Запустить dental
+
+```bash
+git clone https://github.com/subanovkanat321/dental /opt/dental && cd /opt/dental
+cp .env.prod.example .env && chmod 600 .env
+openssl rand -hex 24   # → POSTGRES_PASSWORD
+openssl rand -hex 32   # → TELEGRAM_WEBHOOK_SECRET
+nano .env              # DENTAL_DOMAIN, пароли, токен бота, CLINIC_CONTACT
+docker compose -f compose.prod.yaml --env-file .env up -d --build
+docker compose -f compose.prod.yaml --env-file .env logs -f certbot   # ждать «сертификат … получен»
+```
+
+Проверка: `https://<DENTAL_DOMAIN>/actuator/health` → `UP`, в Telegram боту `/start` →
+кнопка «Открыть день».
+
+**Один бот на ноутбуке и сервере.** При старте в режиме polling приложение снимает webhook,
+и сервер перестаёт получать сообщения. После деплоя на ноутбуке — `TELEGRAM_MODE=off`
+(Mini App в браузере работает и так); если webhook всё же снялся —
+`docker compose -f compose.prod.yaml --env-file .env restart app` на сервере ставит его заново.
+
+### 3. Бэкап по ночам
+
+```bash
+crontab -e
+15 3 * * * /opt/dental/deploy/backup.sh >> /var/log/dental-backup.log 2>&1
+```
+
+`deploy/verify-backup.sh` — восстанавливает последний бэкап во временный Postgres и считает
+строки. До настоящих пациентов (шаг 8) нужна копия вне сервера: `BACKUP_REMOTE` в `.env`
+(rclone, как в store).
+
+### Обновление
+
+```bash
+cd /opt/dental && git pull && docker compose -f compose.prod.yaml --env-file .env up -d --build
+```
+
 ## Этапы
 
 1. ✅ Скелет, профили, миграция V1, тесты ограничений, CI

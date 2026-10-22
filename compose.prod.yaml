@@ -1,0 +1,95 @@
+# Прод на одном VPS (2 ГБ RAM). Запуск на сервере (README, «Деплой»):
+#   docker compose -f compose.prod.yaml --env-file .env up -d --build
+# Все секреты — в .env рядом с этим файлом (шаблон: .env.prod.example), в git его нет.
+#
+# Наружу открыт только nginx (80 и 443). Приложение и база доступны лишь внутри сети Docker.
+
+# Своё имя проекта: иначе им стало бы имя папки (dental), как у compose.yaml для ноутбука,
+# и оба стека делили бы один том pgdata — прод подхватил бы локальную базу с её паролем.
+# Не менять после первого запуска: том с данными останется под старым именем
+name: dental-prod
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dental
+      POSTGRES_USER: dental
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dental -d dental"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Лимиты памяти: 256 + 512 + 64 + 128 ≈ 1 ГБ из 2 ГБ сервера. Без лимитов один
+    # разросшийся контейнер может выдавить остальные
+    mem_limit: 256m
+
+  app:
+    build: .
+    restart: unless-stopped
+    # Готовность: приложение поднялось и база отвечает. В образе нет curl — запрос средствами bash
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    # Приложению нужно до 20 с, чтобы дописать начатые запросы; Docker по умолчанию ждёт 10
+    stop_grace_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/dental
+      SPRING_DATASOURCE_USERNAME: dental
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      PUBLIC_URL: https://${DENTAL_DOMAIN:?задайте DENTAL_DOMAIN в .env}
+      TELEGRAM_MODE: ${TELEGRAM_MODE:-webhook}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?задайте TELEGRAM_BOT_TOKEN в .env}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:?задайте TELEGRAM_WEBHOOK_SECRET в .env}
+      ALLOWED_TELEGRAM_IDS: ${ALLOWED_TELEGRAM_IDS:?задайте ALLOWED_TELEGRAM_IDS в .env}
+      CLINIC_CONTACT: ${CLINIC_CONTACT:-}
+    # Куча 75% = 384 МБ: хватает с запасом для 5–10 запросов в минуту
+    mem_limit: 512m
+
+  # HTTPS и заголовки безопасности (deploy/nginx). Всё, кроме служебных адресов, — в приложение
+  nginx:
+    build: deploy/nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DENTAL_DOMAIN: ${DENTAL_DOMAIN}
+    volumes:
+      - letsencrypt:/etc/letsencrypt:ro
+      - acme:/var/www/acme:ro
+    mem_limit: 64m
+
+  # Получает и продлевает сертификат Let's Encrypt (deploy/certbot.sh, как в store)
+  certbot:
+    image: certbot/certbot:v5.1.0
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    entrypoint: ["/bin/sh", "/deploy/certbot.sh"]
+    environment:
+      DENTAL_DOMAIN: ${DENTAL_DOMAIN}
+    volumes:
+      - ./deploy/certbot.sh:/deploy/certbot.sh:ro
+      - letsencrypt:/etc/letsencrypt
+      - acme:/var/www/acme
+    mem_limit: 128m
+
+volumes:
+  pgdata:
+  letsencrypt:
+  acme:
