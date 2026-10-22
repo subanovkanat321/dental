@@ -12,6 +12,14 @@ spring:
     name: dental
   lifecycle:
     timeout-per-shutdown-phase: 20s
+  web:
+    resources:
+      cache:
+        # Mini App (index.html, app.js, app.css): браузер Telegram каждый раз сверяет файлы
+        # с сервером (ответ 304, если не менялись). Без заголовка он кэширует на своё усмотрение
+        # и после обновления сервера долго показывал бы старую версию
+        cachecontrol:
+          no-cache: true
   jpa:
     open-in-view: false
     hibernate:
