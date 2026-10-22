@@ -29,6 +29,11 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-flyway</artifactId>
 		</dependency>
+		<!-- RestClient.Builder для клиента Bot API (в Boot 4 — отдельный стартер) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-restclient</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
@@ -66,6 +71,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-flyway-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-restclient-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

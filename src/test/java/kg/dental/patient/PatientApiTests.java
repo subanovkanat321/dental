@@ -3,9 +3,11 @@ package kg.dental.patient;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import kg.dental.IntegrationTest;
+import kg.dental.TestInitData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -104,12 +106,12 @@ class PatientApiTests {
 	private MvcTestResult create(String fullName, String phone, boolean allowDuplicate) {
 		return mvc.post().uri("/api/patients").contentType(MediaType.APPLICATION_JSON).content("""
 				{"fullName": "%s", "phone": "%s", "allowDuplicate": %s}""".formatted(fullName, phone, allowDuplicate))
-			.exchange();
+			.header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
 	}
 
 	private MvcTestResult search(String query) {
 		return mvc.post().uri("/api/patients/search").contentType(MediaType.APPLICATION_JSON).content("""
-				{"query": "%s"}""".formatted(query)).exchange();
+				{"query": "%s"}""".formatted(query)).header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
 	}
 
 }

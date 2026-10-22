@@ -43,14 +43,30 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 | `POST /api/appointments/{id}/undo` `{version, previousStatus}` | «Вернуть» после отмены или «не пришёл» |
 | `POST /api/appointments/{id}/reminder-opened` | кнопка WhatsApp нажата |
 
-**Проверки доступа пока нет** — она появится на шагах 3–4 (initData Telegram и список
-разрешённых id). До этого приложение не выкладывать на сервер.
+## Вход и бот
+
+- Каждый запрос к `/api/**` несёт `Authorization: tma <initData>` — строку, которую Telegram
+  передаёт в Mini App. Сервер проверяет подпись токеном бота и срок (24 ч): иначе 401
+  «Сессия устарела — откройте заново из бота». Подпись верна, но id не в
+  `ALLOWED_TELEGRAM_IDS` — 403 с контактом клиники.
+- `POST /telegram/webhook` — сообщения боту на сервере; без верного
+  `X-Telegram-Bot-Api-Secret-Token` — 401, иначе всегда 200.
+- `/start` от врача — приветствие и кнопка меню «Открыть день» (если `PUBLIC_URL` — https);
+  от постороннего — «Это служебный бот записи клиники…» и контакт.
+
+### Бот на ноутбуке
+
+1. `cp .env.example .env` и заполнить: токен от @BotFather, свой id (@userinfobot),
+   `TELEGRAM_MODE=polling`. `.env` в `.gitignore`, профиль `local` читает его сам.
+2. `./mvnw spring-boot:run` → написать боту `/start`.
+3. Кнопка Mini App появится только с https-адресом: туннель (например,
+   `cloudflared tunnel --url http://localhost:8080`) и его адрес в `PUBLIC_URL`.
 
 ## Этапы
 
 1. ✅ Скелет, профили, миграция V1, тесты ограничений, CI
 2. ✅ Пациенты и приёмы: REST API, 409 «Время занято», переходы статусов, undo
-3. Telegram: webhook, проверка initData, список доступа
+3. ✅ Telegram: webhook, проверка initData, список доступа
 4. Mini App: «День», карточка приёма, «Новая запись»
 5. Сетка свободного времени (`/api/slots`), рабочие часы
 6. Напоминания (wa.me) и утренняя сводка

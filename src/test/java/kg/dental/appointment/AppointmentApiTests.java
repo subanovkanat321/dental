@@ -7,9 +7,11 @@ import java.time.Instant;
 
 import com.jayway.jsonpath.JsonPath;
 import kg.dental.IntegrationTest;
+import kg.dental.TestInitData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -89,7 +91,7 @@ class AppointmentApiTests {
 	@Test
 	void unknownPatientIs404() {
 		var result = mvc.post().uri("/api/appointments").contentType(MediaType.APPLICATION_JSON).content("""
-				{"patientId": 999999, "startAt": "%s", "durationMinutes": 30}""".formatted(FUTURE)).exchange();
+				{"patientId": 999999, "startAt": "%s", "durationMinutes": 30}""".formatted(FUTURE)).header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
 
 		assertThat(result).hasStatus(HttpStatus.NOT_FOUND).bodyJson().extractingPath("$.detail")
 			.isEqualTo("Пациент не найден");
@@ -261,7 +263,7 @@ class AppointmentApiTests {
 
 		assertThat(post(id, "reminder-opened", "")).hasStatus(HttpStatus.NO_CONTENT);
 
-		var json = assertThat(mvc.get().uri("/api/appointments/" + id)).hasStatusOk().bodyJson();
+		var json = assertThat(mvc.get().uri("/api/appointments/" + id).header(HttpHeaders.AUTHORIZATION, TestInitData.doctor())).hasStatusOk().bodyJson();
 		json.extractingPath("$.reminderOpenedAt").isNotNull();
 		json.extractingPath("$.version").isEqualTo(0);
 		// Карточка, открытая до нажатия WhatsApp, по-прежнему может менять приём
@@ -359,7 +361,7 @@ class AppointmentApiTests {
 		// 2099-06-01T18:00Z — уже 2 июня
 		create("2099-06-01T18:00:00Z", 30);
 
-		var json = assertThat(mvc.get().uri("/api/appointments?date=2099-06-01")).hasStatusOk().bodyJson();
+		var json = assertThat(mvc.get().uri("/api/appointments?date=2099-06-01").header(HttpHeaders.AUTHORIZATION, TestInitData.doctor())).hasStatusOk().bodyJson();
 		json.extractingPath("$[*].startAt").asArray()
 			.containsExactly("2099-05-31T18:00:00Z", "2099-06-01T05:00:00Z");
 		json.extractingPath("$[1].status").isEqualTo("CANCELLED");
@@ -369,12 +371,12 @@ class AppointmentApiTests {
 	private MvcTestResult create(String startAt, int durationMinutes) {
 		return mvc.post().uri("/api/appointments").contentType(MediaType.APPLICATION_JSON).content("""
 				{"patientId": %d, "startAt": "%s", "durationMinutes": %d}"""
-			.formatted(patientId, startAt, durationMinutes)).exchange();
+			.formatted(patientId, startAt, durationMinutes)).header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
 	}
 
 	private MvcTestResult post(long id, String action, String body) {
 		var request = mvc.post().uri("/api/appointments/{id}/{action}", id, action);
-		return (body.isEmpty() ? request : request.contentType(MediaType.APPLICATION_JSON).content(body)).exchange();
+		return (body.isEmpty() ? request : request.contentType(MediaType.APPLICATION_JSON).content(body)).header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
 	}
 
 	private static long id(MvcTestResult result) {

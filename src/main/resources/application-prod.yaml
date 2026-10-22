@@ -15,3 +15,7 @@ logging:
     format:
       # Логи одной строкой JSON — их удобно искать и разбирать
       console: ecs
+
+dental:
+  telegram:
+    mode: ${TELEGRAM_MODE:webhook}

@@ -6,6 +6,10 @@
 # Начать с чистой базы: docker compose down -v.
 
 spring:
+  # Секреты для ноутбука — в .env рядом с pom.xml (он в .gitignore), формат KEY=value.
+  # Шаблон — .env.example. Файла нет — запуск без бота
+  config:
+    import: optional:file:.env[.properties]
   docker:
     compose:
       # Не останавливать базу вместе с приложением

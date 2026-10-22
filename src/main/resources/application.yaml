@@ -21,6 +21,19 @@ spring:
 dental:
   # Время приёмов в базе — UTC (timestamptz), врачу и пациентам показываем по Бишкеку
   time-zone: Asia/Bishkek
+  telegram:
+    # Секреты — только переменными окружения (на ноутбуке — файл .env, см. .env.example)
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+    # Telegram id врача (и ассистента) через запятую. Свой id подскажет @userinfobot
+    allowed-ids: ${ALLOWED_TELEGRAM_IDS:}
+    # off | polling | webhook. Без явного выбора бот молчит
+    mode: ${TELEGRAM_MODE:off}
+    # https-адрес приложения: webhook и кнопка Mini App
+    public-url: ${PUBLIC_URL:}
+    # Ответ посторонним: как записаться (телефон регистратуры — не пациента)
+    clinic-contact: ${CLINIC_CONTACT:}
+    init-data-max-age: 24h
 
 management:
   endpoints:
