@@ -114,8 +114,9 @@ class AppointmentScheduleConstraintTests {
 		return Timestamp.from(Instant.parse("2027-06-01T" + time + ":00Z"));
 	}
 
+	/** Только приёмы своего пациента: другие тестовые классы делят ту же базу и оставляют свои строки. */
 	private int count() {
-		return jdbc.queryForObject("select count(*) from appointment", Integer.class);
+		return jdbc.queryForObject("select count(*) from appointment where patient_id = ?", Integer.class, patientId);
 	}
 
 	/**
