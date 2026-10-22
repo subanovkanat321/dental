@@ -236,7 +236,8 @@ async function dayScreen(date, flashId) {
       h('button', { type: 'button', class: 'arrow', 'aria-label': 'Следующий день', onclick: () => dayScreen(addDays(date, 1)) }, '›')),
     h('div', { class: 'segments' },
       h('button', { type: 'button', 'aria-pressed': String(date === today), onclick: () => dayScreen(today) }, 'Сегодня'),
-      h('button', { type: 'button', 'aria-pressed': String(date === addDays(today, 1)), onclick: () => dayScreen(addDays(today, 1)) }, 'Завтра')));
+      h('button', { type: 'button', 'aria-pressed': String(date === addDays(today, 1)), onclick: () => dayScreen(addDays(today, 1)) }, 'Завтра'),
+      h('button', { type: 'button', onclick: () => patientsScreen(() => dayScreen(date)) }, 'Пациенты')));
 
   render(head, ...Array.from({ length: 6 }, () => h('div', { class: 'skeleton' })));
 
@@ -418,7 +419,9 @@ function cardScreen(a, notice) {
     backButton.link(),
     h('h1', { class: 'time' }, `${timeOf(a.startAt)}–${timeOf(a.endAt)}`),
     h('div', { class: 'hint' }, dayTitle(dateOf(a.startAt))),
-    h('p', {}, h('strong', {}, a.patient.fullName), h('br'), formatPhone(a.patient.phone)),
+    h('p', {}, h('button', {
+      type: 'button', class: 'link name-link', onclick: () => patientScreen(a.patient.id, () => cardScreen(a)),
+    }, a.patient.fullName, ' ›'), h('br'), formatPhone(a.patient.phone)),
     h('p', { class: `tone-${state.tone}` }, `${state.icon} ${state.label}`),
     notice ? h('p', { class: 'hint' }, notice) : null,
     error,
@@ -586,14 +589,143 @@ function timeFields({ date, time = '', duration = 30, exclude }) {
   return fields;
 }
 
+// ---------- Пациенты ----------
+
+/** Поиск пациента из «Дня» → карточка пациента. Поиск — POST: в нём бывает номер телефона. */
+function patientsScreen(back) {
+  const id = ++screenId;
+  hideToast();
+  mainButton.hide();
+  backButton.set(back);
+  const results = h('div', {});
+  let timer;
+  let seq = 0;
+  const search = h('input', {
+    type: 'search', placeholder: 'Имя или телефон', autocomplete: 'off', 'aria-label': 'Поиск пациента',
+    oninput: () => {
+      clearTimeout(timer);
+      results.replaceChildren();
+      timer = setTimeout(async () => {
+        const query = search.value.trim();
+        const mine = ++seq;
+        if (!query) return;
+        try {
+          const found = await api('POST', '/api/patients/search', { query });
+          if (mine !== seq || id !== screenId) return;
+          results.replaceChildren(...(found.length ? found.map((p) => h('button', {
+            type: 'button', class: 'btn', onclick: () => patientScreen(p.id, () => patientsScreen(back)),
+          }, p.fullName, h('br'), h('span', { class: 'hint' }, formatPhone(p.phone))))
+            : [h('div', { class: 'hint' }, 'Никого не нашлось')]));
+        } catch (e) {
+          if (!fatal(e)) results.replaceChildren(h('div', { class: 'error' }, errorText(e)));
+        }
+      }, 250);
+    },
+  });
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Пациенты'),
+    h('label', { class: 'field' }, h('span', {}, 'Найти'), search), results));
+  search.focus();
+}
+
+/** Карточка пациента: история приёмов, сколько раз пришёл / не пришёл / отменял. */
+async function patientScreen(patientId, back) {
+  const id = ++screenId;
+  hideToast();
+  mainButton.hide();
+  backButton.set(back);
+  render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'skeleton' })));
+  let card;
+  try {
+    card = await api('GET', `/api/appointments/by-patient/${patientId}`);
+  } catch (e) {
+    if (id !== screenId || fatal(e)) return;
+    render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e),
+      h('button', { type: 'button', class: 'btn primary', onclick: () => patientScreen(patientId, back) }, 'Повторить'))));
+    return;
+  }
+  if (id !== screenId) return;
+  const p = card.patient;
+  const self = () => patientScreen(patientId, back);
+  const now = new Date();
+  const item = (a) => {
+    const state = rowState(a, now);
+    return h('li', {
+      class: `row${state.struck ? ' struck' : ''}`, role: 'listitem', tabindex: 0,
+      onclick: () => cardScreen(a), onkeydown: (e) => e.key === 'Enter' && cardScreen(a),
+    },
+    h('span', { class: 'time' }, timeOf(a.startAt)),
+    h('span', { class: 'name' }, dayTitle(dateOf(a.startAt), now)),
+    h('span', { class: 'time hint' }, timeOf(a.endAt)),
+    h('span', { class: `status tone-${state.tone}` }, `${state.icon} ${state.label}`));
+  };
+  // Цифры — то, ради чего проект: видно, кто часто не приходит
+  const stats = [`Пришёл: ${card.done}`, `не пришёл: ${card.noShow}`, `отменял: ${card.cancelled}`].join(' · ');
+  render(h('section', { class: 'screen' },
+    backButton.link(),
+    h('h1', {}, p.fullName),
+    h('div', {}, formatPhone(p.phone)),
+    h('p', { class: card.noShow > 0 ? 'tone-bad' : 'hint' }, stats),
+    h('button', { type: 'button', class: 'btn primary', onclick: () => newScreen({ date: todayIn(), patient: p }) }, 'Записать снова'),
+    // Пустой чат, без готового текста: для любых вопросов
+    h('button', { type: 'button', class: 'btn', onclick: () => openLink(`https://wa.me/${p.phone}`) }, 'Написать в WhatsApp'),
+    h('button', { type: 'button', class: 'btn', onclick: () => editPatientScreen(p, self) }, 'Изменить имя или телефон'),
+    card.upcoming.length ? h('h2', {}, 'Впереди') : null,
+    card.upcoming.length ? h('ul', { class: 'rows', role: 'list' }, card.upcoming.map(item)) : null,
+    h('h2', {}, 'История'),
+    card.past.length ? h('ul', { class: 'rows', role: 'list' }, card.past.map(item))
+      : h('div', { class: 'hint' }, 'Приёмов ещё не было')));
+}
+
+/** Исправить имя или телефон — те же проверки, что при создании (422 под полем, 409 дубль). */
+function editPatientScreen(p, back) {
+  ++screenId;
+  backButton.set(back);
+  const nameInput = h('input', { type: 'text', value: p.fullName, maxLength: 200, autocomplete: 'off' });
+  const phoneInput = h('input', { type: 'tel', value: formatPhone(p.phone), autocomplete: 'off' });
+  const nameError = h('div', { class: 'error' });
+  const phoneError = h('div', { class: 'error' });
+  const error = h('div', { class: 'error', role: 'alert' });
+  let allowDuplicate = false;
+  async function save() {
+    nameError.textContent = '';
+    phoneError.textContent = '';
+    error.replaceChildren();
+    mainButton.busy(true);
+    try {
+      await api('PUT', `/api/patients/${p.id}`, { fullName: nameInput.value, phone: phoneInput.value, allowDuplicate });
+      haptic('success');
+      back();
+    } catch (e) {
+      mainButton.busy(false);
+      if (fatal(e)) return;
+      haptic('error');
+      if (e.code === 'duplicate-patient') {
+        const other = e.problem.patient;
+        error.replaceChildren(`${e.message}: ${other.fullName}, ${formatPhone(other.phone)}`,
+          h('button', { type: 'button', class: 'btn', onclick: () => { allowDuplicate = true; save(); } }, 'Всё равно сохранить'));
+        return;
+      }
+      const f = e instanceof ApiError ? e.fields : {};
+      nameError.textContent = f.fullName || '';
+      phoneError.textContent = f.phone || '';
+      if (!f.fullName && !f.phone) error.textContent = errorText(e);
+    }
+  }
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Изменить'),
+    h('label', { class: 'field' }, h('span', {}, 'Имя пациента'), nameInput, nameError),
+    h('label', { class: 'field' }, h('span', {}, 'Телефон'), phoneInput, phoneError),
+    error));
+  mainButton.set('Сохранить', save);
+}
+
 // ---------- Новая запись ----------
 
-function newScreen({ date, time, duration }) {
+function newScreen({ date, time, duration, patient }) {
   const id = ++screenId;
   hideToast();
   backButton.set(() => dayScreen(date));
 
-  let picked = null; // выбранный пациент { id, fullName, phone }
+  let picked = patient || null; // выбранный пациент { id, fullName, phone }; «Записать снова» — уже выбран
   let creating = false; // режим «Новый пациент»
   let allowDuplicate = false;
 

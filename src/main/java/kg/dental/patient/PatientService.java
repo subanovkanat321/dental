@@ -49,7 +49,25 @@ public class PatientService {
 	}
 
 	@Transactional
-	public PatientView create(CreatePatientRequest request) {
+	public PatientView create(PatientRequest request) {
+		var valid = validate(request, null);
+		return PatientView.of(patients.save(new Patient(valid.fullName(), valid.phone(), clock.instant())));
+	}
+
+	/** Исправить имя или телефон: те же правила, что при создании. */
+	@Transactional
+	public PatientView update(long id, PatientRequest request) {
+		var patient = require(id);
+		var valid = validate(request, id);
+		patient.rename(valid.fullName(), valid.phone());
+		return PatientView.of(patients.saveAndFlush(patient));
+	}
+
+	private record Valid(String fullName, String phone) {
+	}
+
+	/** @param selfId при правке — сам пациент: совпадение с собой дублем не считается */
+	private Valid validate(PatientRequest request, Long selfId) {
 		var phone = PhoneNumbers.normalize(request.phone())
 			.orElseThrow(() -> new InvalidFieldException("phone",
 					"Номер в формате 0555 123 456, +996 555 123 456 или с кодом страны через +"));
@@ -59,6 +77,7 @@ public class PatientService {
 			// неявок разделится на две карточки (D19). Другое имя с тем же номером — семья
 			patients.findByPhone(phone)
 				.stream()
+				.filter(existing -> !existing.getId().equals(selfId))
 				.filter(existing -> sameName(existing.getFullName(), fullName))
 				.findFirst()
 				.ifPresent(existing -> {
@@ -66,7 +85,7 @@ public class PatientService {
 							Map.of("patient", PatientView.of(existing)));
 				});
 		}
-		return PatientView.of(patients.save(new Patient(fullName, phone, clock.instant())));
+		return new Valid(fullName, phone);
 	}
 
 	/** Для модуля приёмов: пациент по id или 404. */

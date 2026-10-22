@@ -4,7 +4,9 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -32,8 +34,13 @@ class PatientController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	PatientView create(@Valid @RequestBody CreatePatientRequest request) {
+	PatientView create(@Valid @RequestBody PatientRequest request) {
 		return service.create(request);
+	}
+
+	@PutMapping("/{id}")
+	PatientView update(@PathVariable long id, @Valid @RequestBody PatientRequest request) {
+		return service.update(id, request);
 	}
 
 }

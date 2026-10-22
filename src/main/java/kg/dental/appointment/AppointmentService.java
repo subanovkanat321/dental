@@ -5,10 +5,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 
 import kg.dental.DentalProperties;
 import kg.dental.patient.PatientService;
+import kg.dental.patient.PatientView;
 import kg.dental.shared.ConflictException;
 import kg.dental.shared.NotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -59,6 +61,33 @@ public class AppointmentService {
 		var weekAgo = LocalDate.ofInstant(now, zone).minusDays(7).atStartOfDay(zone).toInstant();
 		return new DaySummary(starts.size(), starts.isEmpty() ? null : starts.getFirst(),
 				appointments.countUnmarked(weekAgo, now));
+	}
+
+	/**
+	 * Карточка пациента: что впереди, что было, сколько раз пришёл, не пришёл, отменял.
+	 * Прошлое — не больше 50 последних приёмов: на экране телефона больше не нужно.
+	 */
+	@Transactional(readOnly = true)
+	public PatientCard card(long patientId) {
+		var patient = patients.require(patientId);
+		var all = appointments.findByPatient(patientId);
+		var now = clock.instant();
+		var upcoming = all.stream()
+			.filter(a -> a.getStatus() == AppointmentStatus.SCHEDULED && a.getEndAt().isAfter(now))
+			.sorted(Comparator.comparing(Appointment::getStartAt))
+			.map(AppointmentView::of)
+			.toList();
+		var past = all.stream()
+			.filter(a -> !(a.getStatus() == AppointmentStatus.SCHEDULED && a.getEndAt().isAfter(now)))
+			.limit(50)
+			.map(AppointmentView::of)
+			.toList();
+		return new PatientCard(PatientView.of(patient), count(all, AppointmentStatus.DONE),
+				count(all, AppointmentStatus.NO_SHOW), count(all, AppointmentStatus.CANCELLED), upcoming, past);
+	}
+
+	private static long count(List<Appointment> all, AppointmentStatus status) {
+		return all.stream().filter(a -> a.getStatus() == status).count();
 	}
 
 	@Transactional(readOnly = true)

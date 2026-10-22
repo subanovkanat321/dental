@@ -35,6 +35,11 @@ public class Patient {
 		this.createdAt = createdAt;
 	}
 
+	void rename(String fullName, String phone) {
+		this.fullName = fullName;
+		this.phone = phone;
+	}
+
 	public Long getId() {
 		return id;
 	}

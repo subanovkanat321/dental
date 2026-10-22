@@ -36,6 +36,12 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 			order by a.startAt, a.id""")
 	List<Appointment> findDay(Instant from, Instant to);
 
+	/** Все приёмы пациента, новые сверху — для карточки пациента. */
+	@Query("""
+			select a from Appointment a join fetch a.patient
+			where a.patient.id = :patientId order by a.startAt desc, a.id desc""")
+	List<Appointment> findByPatient(long patientId);
+
 	/** Запланированные приёмы с началом в [from, to) — для утренней сводки. */
 	@Query("""
 			select a.startAt from Appointment a

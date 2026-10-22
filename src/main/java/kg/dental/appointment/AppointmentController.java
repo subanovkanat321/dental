@@ -41,6 +41,12 @@ class AppointmentController {
 		return service.get(id);
 	}
 
+	/** Карточка пациента живёт здесь, а не в модуле пациентов: пациенты о приёмах не знают. */
+	@GetMapping("/by-patient/{patientId}")
+	PatientCard card(@PathVariable long patientId) {
+		return service.card(patientId);
+	}
+
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	AppointmentView create(@Valid @RequestBody AppointmentRequests.Create request) {

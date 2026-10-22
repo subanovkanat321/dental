@@ -35,6 +35,10 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
   «Не сохранено · повторить».
 - **«Завтра»**: «Готово X из N» и главная кнопка «Напомнить следующему (имя, время)» —
   вечерний обход без поиска, кому ещё не написали.
+- **Пациенты** (кнопка в «Дне») и **карточка пациента** (нажатие на имя в карточке приёма):
+  «Пришёл: N · не пришёл: N · отменял: N», «Впереди» и «История», «Записать снова»,
+  «Написать в WhatsApp» (пустой чат), «Изменить имя или телефон». Медицинских записей нет —
+  до шага 8.
 - **«свободно 11:00–12:00»** — окна в рабочих часах (`WORK_HOURS`, `WORK_DAYS`); нажатие —
   запись на это время. Сетку и окна считает сервер тем же условием, что и защита базы.
 
@@ -59,6 +63,8 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 |---|---|
 | `POST /api/patients/search` `{query}` | поиск по части имени или номера (номер не в URL) |
 | `POST /api/patients` `{fullName, phone, allowDuplicate}` | новый пациент; телефон приводится к `996XXXXXXXXX` / цифрам E.164 |
+| `PUT /api/patients/{id}` `{fullName, phone, allowDuplicate}` | исправить имя или телефон, те же проверки |
+| `GET /api/appointments/by-patient/{id}` | карточка пациента: счётчики, будущие и прошлые приёмы |
 | `GET /api/appointments?date=2027-06-01` | приёмы дня по Бишкеку |
 | `GET /api/appointments/{id}` | один приём |
 | `POST /api/appointments` `{patientId, startAt, durationMinutes}` | запись, 15–240 мин |

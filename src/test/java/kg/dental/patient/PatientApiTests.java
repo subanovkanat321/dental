@@ -2,6 +2,7 @@ package kg.dental.patient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.jayway.jsonpath.JsonPath;
 import kg.dental.IntegrationTest;
 import kg.dental.TestInitData;
 import org.junit.jupiter.api.BeforeEach;
@@ -101,6 +102,46 @@ class PatientApiTests {
 
 		assertThat(search("%")).bodyJson().extractingPath("$").asArray().isEmpty();
 		assertThat(search("_")).bodyJson().extractingPath("$").asArray().isEmpty();
+	}
+
+	@Test
+	void editsNameAndPhoneWithSameRules() throws Exception {
+		var id = idOf(create("Айгуль", "0555123456", false));
+
+		var edited = update(id, "  Айгуль   Токтогулова ", "+996 700 11 22 33", false);
+		assertThat(edited).hasStatusOk();
+		assertThat(edited).bodyJson().extractingPath("$.fullName").isEqualTo("Айгуль Токтогулова");
+		assertThat(edited).bodyJson().extractingPath("$.phone").isEqualTo("996700112233");
+
+		assertThat(update(id, "Айгуль", "12", false)).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+			.bodyJson().extractingPath("$.errors[0].field").isEqualTo("phone");
+		// Сохранить себя без изменений — не дубль самого себя
+		assertThat(update(id, "Айгуль Токтогулова", "996700112233", false)).hasStatusOk();
+	}
+
+	@Test
+	void editIntoAnotherPatientsNameAndPhoneAsksFirst() throws Exception {
+		create("Бакыт М.", "0700112233", false);
+		var id = idOf(create("Бакыт", "0700112233", false)); // семья: тот же номер, другое имя
+
+		assertThat(update(id, "бакыт м.", "0700112233", false)).hasStatus(HttpStatus.CONFLICT)
+			.bodyJson().extractingPath("$.code").isEqualTo("duplicate-patient");
+		assertThat(update(id, "бакыт м.", "0700112233", true)).hasStatusOk();
+	}
+
+	@Test
+	void editUnknownPatientIs404() {
+		assertThat(update(999999, "Кто-то", "0555123456", false)).hasStatus(HttpStatus.NOT_FOUND);
+	}
+
+	private MvcTestResult update(long id, String fullName, String phone, boolean allowDuplicate) {
+		return mvc.put().uri("/api/patients/" + id).contentType(MediaType.APPLICATION_JSON).content("""
+				{"fullName": "%s", "phone": "%s", "allowDuplicate": %s}""".formatted(fullName, phone, allowDuplicate))
+			.header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
+	}
+
+	private static long idOf(MvcTestResult result) throws Exception {
+		return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
 	}
 
 	private MvcTestResult create(String fullName, String phone, boolean allowDuplicate) {
