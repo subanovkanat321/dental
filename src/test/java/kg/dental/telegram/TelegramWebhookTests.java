@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import java.net.URI;
 
+import kg.dental.AssetVersion;
 import kg.dental.IntegrationTest;
 import kg.dental.TestInitData;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,9 @@ class TelegramWebhookTests {
 	@MockitoBean
 	TelegramClient telegram;
 
+	@Autowired
+	AssetVersion version;
+
 	@Test
 	void wrongOrMissingSecretIs401AndNothingHappens() {
 		assertThat(webhook("wrong", start(TestInitData.DOCTOR_ID))).hasStatus(HttpStatus.UNAUTHORIZED);
@@ -45,7 +49,9 @@ class TelegramWebhookTests {
 		assertThat(webhook(SECRET, start(TestInitData.DOCTOR_ID))).hasStatusOk();
 
 		verify(telegram).sendMessage(TestInitData.DOCTOR_ID, BotTexts.WELCOME);
-		verify(telegram).setChatMenuButton(TestInitData.DOCTOR_ID, "Открыть день", URI.create("https://dental.test"));
+		// Адрес с версией: после обновления сервера кнопка ведёт на свежие файлы (AssetVersion)
+		verify(telegram).setChatMenuButton(TestInitData.DOCTOR_ID, "Открыть день",
+				URI.create("https://dental.test/?v=" + version.value()));
 	}
 
 	@Test

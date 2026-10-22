@@ -1,10 +1,10 @@
 package kg.dental.digest;
 
-import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 
+import kg.dental.AssetVersion;
 import kg.dental.DentalProperties;
 import kg.dental.appointment.AppointmentService;
 import kg.dental.telegram.TelegramClient;
@@ -39,13 +39,16 @@ class MorningDigestJob {
 
 	private final Clock clock;
 
+	private final AssetVersion version;
+
 	MorningDigestJob(AppointmentService appointments, TelegramClient telegram, TelegramProperties telegramProperties,
-			DentalProperties properties, Clock clock) {
+			DentalProperties properties, Clock clock, AssetVersion version) {
 		this.appointments = appointments;
 		this.telegram = telegram;
 		this.telegramProperties = telegramProperties;
 		this.properties = properties;
 		this.clock = clock;
+		this.version = version;
 	}
 
 	@Scheduled(cron = "0 0 9 * * *", zone = "${dental.time-zone}")
@@ -70,7 +73,7 @@ class MorningDigestJob {
 				try {
 					var url = telegramProperties.publicUrl();
 					if (url != null && "https".equals(url.getScheme())) {
-						telegram.sendMessage(chatId, text, "Открыть завтра", URI.create(url + "?day=tomorrow"));
+						telegram.sendMessage(chatId, text, "Открыть завтра", version.miniApp(url, "day=tomorrow"));
 					}
 					else {
 						telegram.sendMessage(chatId, text);

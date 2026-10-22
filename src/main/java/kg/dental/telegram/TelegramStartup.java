@@ -57,6 +57,8 @@ class TelegramStartup implements SmartLifecycle {
 			case OFF -> {
 			}
 		}
+		// Новая версия Mini App — новый адрес в кнопке меню (AssetVersion)
+		handler.refreshMenuButtons();
 	}
 
 	private void registerWebhook() {

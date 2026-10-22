@@ -13,6 +13,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 
+import kg.dental.AssetVersion;
 import kg.dental.IntegrationTest;
 import kg.dental.TestInitData;
 import kg.dental.telegram.TelegramClient;
@@ -46,6 +47,9 @@ class MorningDigestJobTests {
 	@MockitoBean
 	TelegramClient telegram;
 
+	@Autowired
+	AssetVersion version;
+
 	long patientId;
 
 	@BeforeEach
@@ -78,7 +82,7 @@ class MorningDigestJobTests {
 
 		assertThat(text).isEqualTo("Завтра приёмов нет.");
 		verify(telegram).sendMessage(eq(TestInitData.DOCTOR_ID), anyString(), eq("Открыть завтра"),
-				eq(URI.create("https://dental.test?day=tomorrow")));
+				eq(URI.create("https://dental.test/?day=tomorrow&v=" + version.value())));
 	}
 
 	@Test
