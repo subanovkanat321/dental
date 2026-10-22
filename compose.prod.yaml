@@ -55,6 +55,8 @@ services:
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:?задайте TELEGRAM_WEBHOOK_SECRET в .env}
       ALLOWED_TELEGRAM_IDS: ${ALLOWED_TELEGRAM_IDS:?задайте ALLOWED_TELEGRAM_IDS в .env}
       CLINIC_CONTACT: ${CLINIC_CONTACT:-}
+      # Подпись в конце напоминания пациенту в WhatsApp
+      CLINIC_SIGNATURE: ${CLINIC_SIGNATURE:-}
       # Рабочие часы и дни (по Бишкеку) для «свободно» и сетки времени
       WORK_HOURS: ${WORK_HOURS:-09:00-18:00}
       WORK_DAYS: ${WORK_DAYS:-MON-SUN}

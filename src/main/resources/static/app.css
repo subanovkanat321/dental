@@ -46,7 +46,7 @@ button { font: inherit; color: inherit; }
 
 /* Строки «Дня» (DD1): время — имя — статус, без карточек */
 .rows { list-style: none; margin: 0; padding: 0; }
-.row { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; min-height: 56px; padding: 8px 16px; border-bottom: 1px solid var(--separator); cursor: pointer; }
+.row { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: center; min-height: 56px; padding: 8px 16px; border-bottom: 1px solid var(--separator); cursor: pointer; }
 .row.next { background: var(--secondary-bg); }
 .row.flash { animation: flash 1.5s; }
 @keyframes flash { from { background: var(--secondary-bg); } }
@@ -56,6 +56,8 @@ button { font: inherit; color: inherit; }
 .day-note { margin-top: 6px; font-size: .88rem; }
 .row .name { overflow-wrap: anywhere; }
 .row .status { grid-column: 2; font-size: .88rem; }
+/* Кнопка WhatsApp справа на обе строки (DD1, DD10: 56×56) */
+.wa { grid-column: 3; grid-row: 1 / span 2; width: 56px; height: 56px; border: 0; border-radius: 50%; background: #25D366; color: #fff; font-weight: 700; cursor: pointer; }
 .row.struck .name, .row.struck .time { text-decoration: line-through; color: var(--hint); }
 .tone-ok { color: var(--status-ok); }
 .tone-wait { color: var(--status-wait); }

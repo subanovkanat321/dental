@@ -36,6 +36,20 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 			order by a.startAt, a.id""")
 	List<Appointment> findDay(Instant from, Instant to);
 
+	/** Запланированные приёмы с началом в [from, to) — для утренней сводки. */
+	@Query("""
+			select a.startAt from Appointment a
+			where a.status = kg.dental.appointment.AppointmentStatus.SCHEDULED
+			and a.startAt >= :from and a.startAt < :to order by a.startAt""")
+	List<Instant> findScheduledStarts(Instant from, Instant to);
+
+	/** Прошедшие приёмы без отметки «пришёл» / «не пришёл», закончившиеся в [from, to). */
+	@Query("""
+			select count(a) from Appointment a
+			where a.status = kg.dental.appointment.AppointmentStatus.SCHEDULED
+			and a.endAt >= :from and a.endAt < :to""")
+	long countUnmarked(Instant from, Instant to);
+
 	/**
 	 * Отметка «напоминание открыто» прямым UPDATE, без {@code @Version}: её шлёт кнопка
 	 * WhatsApp запросом keepalive, ответ которого Mini App не ждёт. Если бы отметка

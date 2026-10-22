@@ -25,6 +25,8 @@ dental:
   # времени. Записать вне их можно — через «Другое время». Обед и разные часы по дням — не в v1
   work-hours: ${WORK_HOURS:09:00-18:00}
   work-days: ${WORK_DAYS:MON-SUN}
+  # Подпись в конце напоминания в WhatsApp, например «Стоматология «Улыбка», 0555 000 000»
+  clinic-signature: ${CLINIC_SIGNATURE:}
   telegram:
     # Секреты — только переменными окружения (на ноутбуке — файл .env, см. .env.example)
     bot-token: ${TELEGRAM_BOT_TOKEN:}

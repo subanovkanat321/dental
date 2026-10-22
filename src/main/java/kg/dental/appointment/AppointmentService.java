@@ -47,6 +47,20 @@ public class AppointmentService {
 		return appointments.findDay(from, to).stream().map(AppointmentView::of).toList();
 	}
 
+	/**
+	 * Для утренней сводки: приёмы на {@code date} и неотмеченные за 7 дней до {@code now}
+	 * (R7/D9: не только «вчера» — в понедельник видно и субботу).
+	 */
+	@Transactional(readOnly = true)
+	public DaySummary summary(LocalDate date, Instant now) {
+		var zone = properties.timeZone();
+		var starts = appointments.findScheduledStarts(date.atStartOfDay(zone).toInstant(),
+				date.plusDays(1).atStartOfDay(zone).toInstant());
+		var weekAgo = LocalDate.ofInstant(now, zone).minusDays(7).atStartOfDay(zone).toInstant();
+		return new DaySummary(starts.size(), starts.isEmpty() ? null : starts.getFirst(),
+				appointments.countUnmarked(weekAgo, now));
+	}
+
 	@Transactional(readOnly = true)
 	public AppointmentView get(long id) {
 		return AppointmentView.of(require(id));

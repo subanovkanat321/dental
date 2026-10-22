@@ -42,7 +42,14 @@ public class TelegramClient {
 	}
 
 	public void sendMessage(long chatId, String text) {
-		call("sendMessage", new TelegramApi.SendMessage(chatId, text), ANY);
+		call("sendMessage", new TelegramApi.SendMessage(chatId, text, null), ANY);
+	}
+
+	/** Сообщение с кнопкой под ним, которая открывает Mini App по адресу webAppUrl (https). */
+	public void sendMessage(long chatId, String text, String buttonText, URI webAppUrl) {
+		var button = new TelegramApi.InlineButton(buttonText, new TelegramApi.WebAppInfo(webAppUrl.toString()));
+		call("sendMessage", new TelegramApi.SendMessage(chatId, text, new TelegramApi.InlineKeyboard(List.of(List.of(button)))),
+				ANY);
 	}
 
 	/** Кнопка меню чата открывает Mini App по этому адресу (нужен https). */

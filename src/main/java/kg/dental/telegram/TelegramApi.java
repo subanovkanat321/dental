@@ -3,6 +3,7 @@ package kg.dental.telegram;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
@@ -35,7 +36,16 @@ public final class TelegramApi {
 	public record Chat(long id, String type) {
 	}
 
-	record SendMessage(@JsonProperty("chat_id") long chatId, String text) {
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	record SendMessage(@JsonProperty("chat_id") long chatId, String text,
+			@JsonProperty("reply_markup") InlineKeyboard replyMarkup) {
+	}
+
+	/** Кнопки под сообщением; у нас одна — открыть Mini App. */
+	record InlineKeyboard(@JsonProperty("inline_keyboard") List<List<InlineButton>> rows) {
+	}
+
+	record InlineButton(String text, @JsonProperty("web_app") WebAppInfo webApp) {
 	}
 
 	record SetWebhook(String url, @JsonProperty("secret_token") String secretToken,

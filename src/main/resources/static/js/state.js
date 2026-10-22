@@ -92,3 +92,54 @@ export function dayItems(appointments, free) {
 export function windowDuration(window) {
   return Math.min(30, minutesBetween(window.startAt, window.endAt));
 }
+
+// ---------- Напоминание в WhatsApp (DD12, ER3) ----------
+
+// Винительный падеж: «в четверг», но «во вторник», «в среду», «в пятницу», «в субботу»
+const WEEKDAY_ON = ['в воскресенье', 'в понедельник', 'во вторник', 'в среду', 'в четверг', 'в пятницу', 'в субботу'];
+
+/** «сегодня» / «завтра» / «в четверг, 23 октября» — по Бишкеку на момент нажатия. */
+export function whenText(startAt, now = new Date()) {
+  const day = dateOf(startAt);
+  const today = todayIn(now);
+  if (day === today) return 'сегодня';
+  if (day === addDays(today, 1)) return 'завтра';
+  const date = new Date(`${day}T00:00:00Z`);
+  const dayMonth = new Intl.DateTimeFormat('ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long' }).format(date);
+  return `${WEEKDAY_ON[date.getUTCDay()]}, ${dayMonth}`;
+}
+
+/** Текст напоминания пациенту. В приложении не редактируется — врач может поправить его в WhatsApp. */
+export function reminderText(a, signature = '', now = new Date()) {
+  const text = `Здравствуйте, ${a.patient.fullName}! Напоминаем: ${whenText(a.startAt, now)} в ${timeOf(a.startAt)} `
+    + 'приём у стоматолога. Ответьте 1 — приду, 2 — перенести.';
+  return signature ? `${text} ${signature}` : text;
+}
+
+/** Ссылка wa.me собирается здесь, в браузере: телефон не попадает ни в URL приложения, ни в бота. */
+export function whatsappUrl(phone, text) {
+  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+}
+
+/** Кнопка WhatsApp есть у запланированного и ещё не закончившегося приёма. */
+export function canRemind(a, now = new Date()) {
+  return a.status === 'SCHEDULED' && new Date(a.endAt) > now;
+}
+
+/** «Готово» (ER3): напоминание открыто или пациент уже ответил. Одно правило для счётчика и «следующего». */
+export function isReady(a) {
+  return Boolean(a.reminderOpenedAt) || a.reply !== 'NONE';
+}
+
+/** «Готово X из N» — среди запланированных приёмов дня. */
+export function readyCount(appointments) {
+  const scheduled = appointments.filter((a) => a.status === 'SCHEDULED');
+  return { ready: scheduled.filter(isReady).length, total: scheduled.length };
+}
+
+/** «Напомнить следующему» (DD6): первый по времени не готовый, кроме нажатых в этой сессии. */
+export function nextToRemind(appointments, pressed = new Set(), now = new Date()) {
+  return [...appointments]
+    .sort((x, y) => new Date(x.startAt) - new Date(y.startAt))
+    .find((a) => canRemind(a, now) && !isReady(a) && !pressed.has(a.id)) || null;
+}

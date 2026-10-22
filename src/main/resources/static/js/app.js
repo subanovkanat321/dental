@@ -3,6 +3,7 @@
 import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
+  reminderText, whatsappUrl, canRemind, readyCount, nextToRemind,
 } from './state.js';
 
 const tg = window.Telegram?.WebApp;
@@ -10,6 +11,7 @@ const DURATIONS = [15, 30, 45, 60, 90];
 const SESSION_EXPIRED = 'Сессия устарела — откройте заново из бота';
 
 let initData = tg?.initData || '';
+let settings = { clinicSignature: '' };
 
 // ---------- DOM ----------
 
@@ -174,6 +176,46 @@ function errorText(error) {
 // Номер текущего экрана: ответ, пришедший после ухода с экрана, не рисуется поверх нового
 let screenId = 0;
 
+// ---------- Напоминание в WhatsApp (D14, DD6, ER2, ER3) ----------
+
+const pressed = new Set(); // id приёмов, по которым в этой сессии уже нажимали WhatsApp
+const unsaved = new Set(); // id, у которых отметка «напомнили» не дошла до сервера
+
+function openLink(url) {
+  if (insideTelegram) tg.openLink(url);
+  else window.open(url, '_blank', 'noopener');
+}
+
+/** Отметка «напоминание открыто». keepalive: браузер доставит запрос, даже если окно ушло в фон. */
+function markReminder(a, onChange, previous = a.reminderOpenedAt) {
+  fetch(`/api/appointments/${a.id}/reminder-opened`, {
+    method: 'POST', keepalive: true, headers: { Authorization: `tma ${initData}` },
+  }).then((response) => {
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    unsaved.delete(a.id);
+  }).catch(() => {
+    // Сервер не знает об отметке — и «Готово X из N» не должен её считать
+    a.reminderOpenedAt = previous;
+    unsaved.add(a.id);
+    onChange();
+  });
+}
+
+/**
+ * Кнопка WhatsApp. В одном обработчике и без await: сначала запрос-отметка, сразу за ним
+ * openLink. Telegram открывает ссылку, только если её открыли прямо из нажатия; await перед
+ * openLink на части телефонов «съел» бы нажатие, и кнопка молча не работала бы (D14).
+ */
+function remind(a, onChange) {
+  pressed.add(a.id);
+  const previous = a.reminderOpenedAt;
+  markReminder(a, onChange, previous);
+  openLink(whatsappUrl(a.patient.phone, reminderText(a, settings.clinicSignature)));
+  // Локально сразу «Ждём ответа»; сервер поставит своё время отметки
+  if (!a.reminderOpenedAt) a.reminderOpenedAt = new Date().toISOString();
+  onChange();
+}
+
 // ---------- «День» ----------
 
 async function dayScreen(date, flashId) {
@@ -214,20 +256,50 @@ async function dayScreen(date, flashId) {
   }
   if (id !== screenId) return;
 
-  // Нерабочий день (WORK_DAYS): «Выходной», строк «свободно» нет — записать можно через «Другое время» (ER5)
-  if (!slots.workingDay) head.append(h('div', { class: 'hint day-note' }, 'Выходной'));
-  const items = dayItems(appointments, slots.free);
-  if (items.length === 0) {
+  const note = h('div', { class: 'hint day-note' });
+  head.append(note);
+  const list = h('ul', { class: 'rows', role: 'list' });
+  let flash = flashId; // подсветить новую строку один раз, а не при каждой перерисовке
+
+  /** Перерисовать список из уже загруженных данных — после нажатия WhatsApp, без запроса. */
+  function draw() {
+    if (id !== screenId) return;
+    const now = new Date();
+    const isTomorrow = date === addDays(todayIn(now), 1);
+    // Нерабочий день (WORK_DAYS): «Выходной», строк «свободно» нет (ER5)
+    const { ready, total } = readyCount(appointments);
+    note.textContent = [!slots.workingDay && 'Выходной', isTomorrow && total > 0 && `Готово ${ready} из ${total}`]
+      .filter(Boolean).join(' · ');
+    const items = dayItems(appointments, slots.free);
+    const next = date === todayIn(now)
+      ? appointments.find((a) => a.status === 'SCHEDULED' && new Date(a.startAt) > now) : null;
+    list.replaceChildren(...items.map((item) => (item.free
+      ? freeRow(date, item) : row(item, item === next, item.id === flash, now, draw))));
+    flash = null;
+
+    // Вечерний обход (DD6): на «Завтра» главная кнопка ведёт к следующему, кому не напомнили
+    const nextUp = isTomorrow ? nextToRemind(appointments, pressed, now) : null;
+    if (nextUp) {
+      mainButton.set(`Напомнить следующему (${short(nextUp.patient.fullName)}, ${timeOf(nextUp.startAt)})`,
+        () => remind(nextUp, draw));
+    } else {
+      mainButton.set('Новая запись', () => newScreen({ date }));
+    }
+  }
+
+  if (appointments.length === 0 && slots.free.length === 0) {
     render(head, h('div', { class: 'message hint' }, 'На этот день записей нет'));
+    note.textContent = slots.workingDay ? '' : 'Выходной';
     return;
   }
-  const now = new Date();
-  // На «Сегодня» выделен ближайший предстоящий приём (DD1)
-  const next = date === today
-    ? appointments.find((a) => a.status === 'SCHEDULED' && new Date(a.startAt) > now) : null;
-  render(head, h('ul', { class: 'rows', role: 'list' }, items.map((item) => (item.free
-    ? freeRow(date, item) : row(item, item === next, item.id === flashId, now)))));
+  render(head, list);
+  draw();
   if (flashId) haptic('success');
+}
+
+/** Имя для подписи главной кнопки: она узкая. */
+function short(name) {
+  return name.length > 18 ? `${name.slice(0, 17)}…` : name;
 }
 
 /** «свободно 11:00–12:00»: нажатие — «Новая запись» с этим временем (DD2). */
@@ -242,9 +314,26 @@ function freeRow(date, slot) {
   h('span', { class: 'hint' }, `свободно до ${timeOf(slot.endAt)}`));
 }
 
-function row(a, isNext, flash, now) {
-  const state = rowState(a, now);
+function row(a, isNext, flash, now, redraw) {
+  const failed = unsaved.has(a.id);
+  // ER2: недошедшая отметка — локальное состояние строки, не из базы
+  const state = failed ? { label: 'Не сохранено · повторить', icon: '!', tone: 'bad' } : rowState(a, now);
   const classes = ['row', isNext && 'next', flash && 'flash', state.struck && 'struck'].filter(Boolean).join(' ');
+  const wa = canRemind(a, now) ? h('button', {
+    type: 'button', class: 'wa', 'aria-label': `WhatsApp: ${a.patient.fullName}, ${timeOf(a.startAt)}`,
+    onclick: (e) => {
+      e.stopPropagation(); // не открывать карточку
+      if (failed) {
+        // «повторить» — только отметку: WhatsApp уже открывали
+        unsaved.delete(a.id);
+        markReminder(a, redraw);
+        a.reminderOpenedAt = a.reminderOpenedAt || new Date().toISOString();
+        redraw();
+      } else {
+        remind(a, redraw);
+      }
+    },
+  }, failed ? '↻' : 'WA') : null;
   return h('li', {
     class: classes, role: 'listitem', tabindex: 0,
     onclick: () => cardScreen(a),
@@ -252,6 +341,7 @@ function row(a, isNext, flash, now) {
   },
   h('span', { class: 'time' }, timeOf(a.startAt)),
   h('span', { class: 'name' }, a.patient.fullName),
+  wa,
   h('span', { class: 'time hint' }, timeOf(a.endAt)),
   h('span', { class: `status tone-${state.tone}` }, `${state.icon} ${state.label}`));
 }
@@ -307,6 +397,9 @@ function cardScreen(a, notice) {
       })),
       button('Перенести', () => rescheduleScreen(a)),
     );
+    if (canRemind(a)) {
+      actions.unshift(button('Напомнить в WhatsApp', () => remind(a, () => cardScreen(a)), 'btn primary'));
+    }
     if (canMarkVisit(a)) actions.push(button('Пришёл', () => act('status', { status: 'DONE' }), 'btn primary'));
     // Опасные — отдельной группой внизу, без диалогов, но с «Вернуть» (DD7)
     actions.push(h('div', { class: 'danger-zone' },
@@ -643,7 +736,11 @@ async function start() {
     render(h('div', { class: 'message' }, 'Откройте приложение из бота в Telegram'));
     return;
   }
-  dayScreen(todayIn());
+  // Подпись клиники для текста напоминания; без неё напоминание всё равно работает
+  api('GET', '/api/settings').then((loaded) => { settings = loaded; }).catch(() => {});
+  // Кнопка «Открыть завтра» в утренней сводке ведёт на ?day=tomorrow (DD3)
+  const tomorrow = new URLSearchParams(location.search).get('day') === 'tomorrow';
+  dayScreen(tomorrow ? addDays(todayIn(), 1) : todayIn());
 }
 
 start();
