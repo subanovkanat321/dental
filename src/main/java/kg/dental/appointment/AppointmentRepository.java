@@ -1,6 +1,7 @@
 package kg.dental.appointment;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -41,6 +42,13 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 			select a from Appointment a join fetch a.patient
 			where a.patient.id = :patientId order by a.startAt desc, a.id desc""")
 	List<Appointment> findByPatient(long patientId);
+
+	/** Ближайшие запланированные приёмы этих пациентов, по возрастанию — для листа ожидания. */
+	@Query("""
+			select a from Appointment a join fetch a.patient
+			where a.patient.id in :patientIds and a.status = kg.dental.appointment.AppointmentStatus.SCHEDULED
+			and a.endAt > :now order by a.startAt""")
+	List<Appointment> findUpcoming(Collection<Long> patientIds, Instant now);
 
 	/** Запланированные приёмы с началом в [from, to) — для утренней сводки. */
 	@Query("""

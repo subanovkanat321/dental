@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   rowState, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
-  dayItems, windowDuration, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
+  dayItems, windowDuration, fitsWindow, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
 const NOW = new Date('2099-06-01T06:00:00Z'); // 12:00 по Бишкеку
@@ -128,4 +128,16 @@ test('«готово», счётчик и «следующий» по одном
   assert.equal(nextToRemind(list, new Set([3, 4]), now), null);
   assert.ok(isReady(list[2]) && !isReady(list[0]));
   assert.ok(!canRemind({ ...base, endAt: '2099-06-01T11:00:00Z' }, now));
+});
+
+test('лист ожидания: кто помещается в окно и текст «освободилось время»', () => {
+  const window = { startAt: '2099-06-02T03:00:00Z', endAt: '2099-06-02T03:45:00Z' };
+  assert.ok(fitsWindow({ durationMinutes: 45 }, window));
+  assert.ok(!fitsWindow({ durationMinutes: 60 }, window));
+  // Уже записан: окно до его приёма — кандидат, после — нет
+  assert.ok(fitsWindow({ durationMinutes: 30, upcoming: { startAt: '2099-06-02T09:00:00Z' } }, window));
+  assert.ok(!fitsWindow({ durationMinutes: 30, upcoming: { startAt: '2099-06-02T02:00:00Z' } }, window));
+  const text = freeSlotText('Бакыт М.', '2099-06-02T03:00:00Z', '', new Date('2099-06-01T12:00:00Z'));
+  assert.equal(text, 'Здравствуйте, Бакыт М.! Освободилось время у стоматолога: завтра в 09:00. '
+    + 'Хотите прийти? Ответьте «да» — запишем.');
 });

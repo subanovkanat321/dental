@@ -13,6 +13,7 @@ public class ConflictException extends RuntimeException {
 	public static final String STALE = "stale";
 	public static final String INVALID_TRANSITION = "invalid-transition";
 	public static final String DUPLICATE_PATIENT = "duplicate-patient";
+	public static final String ALREADY_WAITING = "already-waiting";
 
 	private final String code;
 

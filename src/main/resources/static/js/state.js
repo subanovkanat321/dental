@@ -143,3 +143,21 @@ export function nextToRemind(appointments, pressed = new Set(), now = new Date()
     .sort((x, y) => new Date(x.startAt) - new Date(y.startAt))
     .find((a) => canRemind(a, now) && !isReady(a) && !pressed.has(a.id)) || null;
 }
+
+// ---------- Лист ожидания ----------
+
+/**
+ * Кандидат ли пациент из листа ожидания в это окно: помещается по длительности и, если уже
+ * записан, окно раньше его приёма — в лист ставят тех, кто хочет прийти раньше.
+ */
+export function fitsWindow(entry, window) {
+  const earlier = !entry.upcoming || new Date(window.startAt) < new Date(entry.upcoming.startAt);
+  return earlier && entry.durationMinutes <= minutesBetween(window.startAt, window.endAt);
+}
+
+/** «Освободилось время»: пациенту из листа ожидания (по Бишкеку на момент нажатия). */
+export function freeSlotText(fullName, startAt, signature = '', now = new Date()) {
+  const text = `Здравствуйте, ${fullName}! Освободилось время у стоматолога: ${whenText(startAt, now)} `
+    + `в ${timeOf(startAt)}. Хотите прийти? Ответьте «да» — запишем.`;
+  return signature ? `${text} ${signature}` : text;
+}

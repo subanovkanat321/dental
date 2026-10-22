@@ -3,7 +3,7 @@
 import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
-  reminderText, whatsappUrl, canRemind, readyCount, nextToRemind,
+  reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
 } from './state.js';
 
 const tg = window.Telegram?.WebApp;
@@ -243,11 +243,13 @@ async function dayScreen(date, flashId) {
 
   let appointments;
   let slots;
+  let waitlist;
   try {
-    // Параллельно: приёмы дня и свободные окна (DD2)
-    [appointments, slots] = await Promise.all([
+    // Параллельно: приёмы дня, свободные окна (DD2) и лист ожидания — кого позвать в окно
+    [appointments, slots, waitlist] = await Promise.all([
       api('GET', `/api/appointments?date=${date}`),
       api('GET', `/api/slots?date=${date}`),
+      api('GET', '/api/waitlist'),
     ]);
   } catch (error) {
     if (id !== screenId || fatal(error)) return;
@@ -275,7 +277,7 @@ async function dayScreen(date, flashId) {
     const next = date === todayIn(now)
       ? appointments.find((a) => a.status === 'SCHEDULED' && new Date(a.startAt) > now) : null;
     list.replaceChildren(...items.map((item) => (item.free
-      ? freeRow(date, item) : row(item, item === next, item.id === flash, now, draw))));
+      ? freeRow(date, item, waitlist) : row(item, item === next, item.id === flash, now, draw))));
     flash = null;
 
     // Вечерний обход (DD6): на «Завтра» главная кнопка ведёт к следующему, кому не напомнили
@@ -303,16 +305,21 @@ function short(name) {
   return name.length > 18 ? `${name.slice(0, 17)}…` : name;
 }
 
-/** «свободно 11:00–12:00»: нажатие — «Новая запись» с этим временем (DD2). */
-function freeRow(date, slot) {
-  const open = () => newScreen({ date, time: timeOf(slot.startAt), duration: windowDuration(slot) });
+/**
+ * «свободно 11:00–12:00»: нажатие — «Новая запись» с этим временем (DD2). Если кто-то из листа
+ * ожидания помещается в окно — «ждут: N», и в записи они будут первыми.
+ */
+function freeRow(date, slot, waitlist = []) {
+  const candidates = waitlist.filter((entry) => fitsWindow(entry, slot));
+  const open = () => newScreen({ date, time: timeOf(slot.startAt), duration: windowDuration(slot), candidates });
   return h('li', {
     class: 'row free', role: 'listitem', tabindex: 0, onclick: open,
     onkeydown: (e) => e.key === 'Enter' && open(),
     'aria-label': `Свободно с ${timeOf(slot.startAt)} до ${timeOf(slot.endAt)}, записать`,
   },
   h('span', { class: 'time' }, timeOf(slot.startAt)),
-  h('span', { class: 'hint' }, `свободно до ${timeOf(slot.endAt)}`));
+  h('span', { class: 'hint' }, `свободно до ${timeOf(slot.endAt)}`,
+    candidates.length ? h('span', { class: 'waiting' }, ` · ждут: ${candidates.length}`) : null));
 }
 
 function row(a, isNext, flash, now, redraw) {
@@ -622,9 +629,19 @@ function patientsScreen(back) {
       }, 250);
     },
   });
+  const waiting = h('div', {});
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Пациенты'),
-    h('label', { class: 'field' }, h('span', {}, 'Найти'), search), results));
+    h('label', { class: 'field' }, h('span', {}, 'Найти'), search), results, waiting));
   search.focus();
+  // Лист ожидания — под поиском: кто хочет прийти раньше
+  api('GET', '/api/waitlist').then((list) => {
+    if (id !== screenId || list.length === 0) return;
+    waiting.replaceChildren(h('h2', {}, `Лист ожидания: ${list.length}`), ...list.map((entry) => h('button', {
+      type: 'button', class: 'btn', onclick: () => patientScreen(entry.patient.id, () => patientsScreen(back)),
+    }, entry.patient.fullName, h('br'), h('span', { class: 'hint' }, entry.upcoming
+      ? `сейчас: ${dayTitle(dateOf(entry.upcoming.startAt))}, ${timeOf(entry.upcoming.startAt)}`
+      : 'ещё не записан', ` · ждёт с ${dayTitle(dateOf(entry.createdAt))}`))));
+  }).catch((e) => fatal(e));
 }
 
 /** Карточка пациента: история приёмов, сколько раз пришёл / не пришёл / отменял. */
@@ -635,8 +652,12 @@ async function patientScreen(patientId, back) {
   backButton.set(back);
   render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'skeleton' })));
   let card;
+  let waitlist;
   try {
-    card = await api('GET', `/api/appointments/by-patient/${patientId}`);
+    [card, waitlist] = await Promise.all([
+      api('GET', `/api/appointments/by-patient/${patientId}`),
+      api('GET', '/api/waitlist'),
+    ]);
   } catch (e) {
     if (id !== screenId || fatal(e)) return;
     render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e),
@@ -668,12 +689,47 @@ async function patientScreen(patientId, back) {
     h('button', { type: 'button', class: 'btn primary', onclick: () => newScreen({ date: todayIn(), patient: p }) }, 'Записать снова'),
     // Пустой чат, без готового текста: для любых вопросов
     h('button', { type: 'button', class: 'btn', onclick: () => openLink(`https://wa.me/${p.phone}`) }, 'Написать в WhatsApp'),
+    waitlistButton(waitlist.find((e) => e.patient.id === p.id), p, card, self),
     h('button', { type: 'button', class: 'btn', onclick: () => editPatientScreen(p, self) }, 'Изменить имя или телефон'),
     card.upcoming.length ? h('h2', {}, 'Впереди') : null,
     card.upcoming.length ? h('ul', { class: 'rows', role: 'list' }, card.upcoming.map(item)) : null,
     h('h2', {}, 'История'),
     card.past.length ? h('ul', { class: 'rows', role: 'list' }, card.past.map(item))
       : h('div', { class: 'hint' }, 'Приёмов ещё не было')));
+}
+
+/**
+ * «Хочет прийти раньше» → в лист ожидания. Длительность — как у ближайшего приёма, иначе 30 минут.
+ * Уже в листе — кнопка убирает.
+ */
+function waitlistButton(entry, p, card, refresh) {
+  if (entry) {
+    return h('button', {
+      type: 'button', class: 'btn',
+      onclick: async () => {
+        try {
+          await api('DELETE', `/api/waitlist/${entry.id}`);
+          refresh();
+        } catch (e) {
+          if (!fatal(e)) toast(errorText(e));
+        }
+      },
+    }, `Убрать из листа ожидания (с ${dayTitle(dateOf(entry.createdAt))})`);
+  }
+  const next = card.upcoming[0];
+  const duration = next ? minutesBetween(next.startAt, next.endAt) : 30;
+  return h('button', {
+    type: 'button', class: 'btn',
+    onclick: async () => {
+      try {
+        await api('POST', '/api/waitlist', { patientId: p.id, durationMinutes: duration });
+        haptic('success');
+        refresh();
+      } catch (e) {
+        if (!fatal(e)) toast(errorText(e));
+      }
+    },
+  }, `В лист ожидания (${duration} мин) — хочет раньше`);
 }
 
 /** Исправить имя или телефон — те же проверки, что при создании (422 под полем, 409 дубль). */
@@ -720,7 +776,7 @@ function editPatientScreen(p, back) {
 
 // ---------- Новая запись ----------
 
-function newScreen({ date, time, duration, patient }) {
+function newScreen({ date, time, duration, patient, candidates = [] }) {
   const id = ++screenId;
   hideToast();
   backButton.set(() => dayScreen(date));
@@ -843,8 +899,40 @@ function newScreen({ date, time, duration, patient }) {
     }
   }
 
+  /**
+   * Лист ожидания для этого окна: написать «освободилось время» и записать (или перенести,
+   * если уже записан) одним нажатием — сервер заодно уберёт пациента из листа.
+   */
+  const waiting = candidates.length ? h('div', { class: 'waitlist' },
+    h('h2', {}, 'Ждут свободного времени'),
+    ...candidates.map((entry) => h('div', { class: 'candidate' },
+      h('div', {}, h('strong', {}, entry.patient.fullName), h('br'), h('span', { class: 'hint' },
+        entry.upcoming ? `сейчас: ${dayTitle(dateOf(entry.upcoming.startAt))}, ${timeOf(entry.upcoming.startAt)}`
+          : 'ещё не записан', ` · ${entry.durationMinutes} мин`)),
+      h('div', { class: 'choice' },
+        h('button', {
+          type: 'button', class: 'btn',
+          onclick: () => {
+            if (!form.validate()) return;
+            openLink(whatsappUrl(entry.patient.phone,
+              freeSlotText(entry.patient.fullName, form.startAt(), settings.clinicSignature)));
+          },
+        }, 'WhatsApp'),
+        h('button', {
+          type: 'button', class: 'btn primary',
+          onclick: async () => {
+            if (!form.validate()) return;
+            try {
+              const booked = await api('POST', `/api/waitlist/${entry.id}/book`, { startAt: form.startAt() });
+              dayScreen(form.date(), booked.id);
+            } catch (e) {
+              if (!fatal(e)) form.showError(e);
+            }
+          },
+        }, entry.upcoming ? 'Перенести сюда' : 'Записать сюда'))))) : null;
+
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Новая запись'),
-    patientBox, patientError, form.node));
+    waiting, patientBox, patientError, form.node));
   drawPatient();
   mainButton.set('Записать', submit);
 }

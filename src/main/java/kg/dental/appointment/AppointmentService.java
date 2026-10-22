@@ -5,8 +5,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import kg.dental.DentalProperties;
 import kg.dental.patient.PatientService;
@@ -88,6 +91,19 @@ public class AppointmentService {
 
 	private static long count(List<Appointment> all, AppointmentStatus status) {
 		return all.stream().filter(a -> a.getStatus() == status).count();
+	}
+
+	/** Ближайший запланированный приём каждого из пациентов — для листа ожидания. */
+	@Transactional(readOnly = true)
+	public Map<Long, AppointmentView> upcoming(Collection<Long> patientIds) {
+		var result = new HashMap<Long, AppointmentView>();
+		if (patientIds.isEmpty()) {
+			return result;
+		}
+		for (var a : appointments.findUpcoming(patientIds, clock.instant())) {
+			result.putIfAbsent(a.getPatient().getId(), AppointmentView.of(a)); // первый — ближайший
+		}
+		return result;
 	}
 
 	@Transactional(readOnly = true)

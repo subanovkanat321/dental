@@ -39,6 +39,10 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
   «Пришёл: N · не пришёл: N · отменял: N», «Впереди» и «История», «Записать снова»,
   «Написать в WhatsApp» (пустой чат), «Изменить имя или телефон». Медицинских записей нет —
   до шага 8.
+- **Лист ожидания**: «В лист ожидания — хочет раньше» в карточке пациента; список — на экране
+  «Пациенты». Окно, куда кто-то из листа помещается (и раньше его приёма), показывает
+  «ждут: N»; в записи из него — кандидаты с WhatsApp «Освободилось время…» и «Записать сюда» /
+  «Перенести сюда» (уже записанного переносит, не дублирует; из листа убирает сам).
 - **«свободно 11:00–12:00»** — окна в рабочих часах (`WORK_HOURS`, `WORK_DAYS`); нажатие —
   запись на это время. Сетку и окна считает сервер тем же условием, что и защита базы.
 
@@ -65,6 +69,8 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 | `POST /api/patients` `{fullName, phone, allowDuplicate}` | новый пациент; телефон приводится к `996XXXXXXXXX` / цифрам E.164 |
 | `PUT /api/patients/{id}` `{fullName, phone, allowDuplicate}` | исправить имя или телефон, те же проверки |
 | `GET /api/appointments/by-patient/{id}` | карточка пациента: счётчики, будущие и прошлые приёмы |
+| `GET /api/waitlist`, `POST /api/waitlist` `{patientId, durationMinutes}`, `DELETE /api/waitlist/{id}` | лист ожидания |
+| `POST /api/waitlist/{id}/book` `{startAt}` | записать или перенести в окно и убрать из листа — одной транзакцией |
 | `GET /api/appointments?date=2027-06-01` | приёмы дня по Бишкеку |
 | `GET /api/appointments/{id}` | один приём |
 | `POST /api/appointments` `{patientId, startAt, durationMinutes}` | запись, 15–240 мин |
