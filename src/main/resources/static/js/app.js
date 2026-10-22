@@ -4,7 +4,7 @@ import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
   reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
-  weekLabel, noShowPercent, averageNoShows, noShowsPhrase,
+  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText,
 } from './state.js';
 
 const tg = window.Telegram?.WebApp;
@@ -608,7 +608,58 @@ function menuScreen(back) {
   const self = () => menuScreen(back);
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Меню'),
     h('button', { type: 'button', class: 'btn', onclick: () => patientsScreen(self) }, 'Пациенты и лист ожидания'),
+    h('button', { type: 'button', class: 'btn', onclick: () => recallScreen(self) }, 'Позвать на профосмотр'),
     h('button', { type: 'button', class: 'btn', onclick: () => statsScreen(self) }, 'Статистика неявок')));
+}
+
+// ---------- Профосмотры ----------
+
+/**
+ * Кто был больше полугода назад и никуда не записан. WhatsApp — так же, как напоминание:
+ * отметка «позвали» с keepalive и сразу openLink. Позванные уходят в конец списка с датой.
+ */
+async function recallScreen(back) {
+  const id = ++screenId;
+  mainButton.hide();
+  backButton.set(back);
+  const self = () => recallScreen(back);
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Позвать на профосмотр'), h('div', { class: 'skeleton' })));
+  let due;
+  try {
+    due = await api('GET', '/api/appointments/recall');
+  } catch (e) {
+    if (id !== screenId || fatal(e)) return;
+    render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e),
+      h('button', { type: 'button', class: 'btn primary', onclick: self }, 'Повторить'))));
+    return;
+  }
+  if (id !== screenId) return;
+  const now = new Date();
+  const item = (r) => {
+    const invited = h('span', { class: 'hint' }, r.invitedAt ? ` · позвали ${agoText(r.invitedAt, now)}` : '');
+    return h('div', { class: 'candidate' },
+      h('div', {}, h('button', {
+        type: 'button', class: 'link name-link', onclick: () => patientScreen(r.patient.id, self),
+      }, r.patient.fullName, ' ›'), h('br'),
+      h('span', { class: 'hint' }, `был ${agoText(r.lastVisit, now)}`), invited),
+      h('div', { class: 'choice' },
+        h('button', {
+          type: 'button', class: 'btn',
+          onclick: () => {
+            fetch(`/api/patients/${r.patient.id}/recall-invited`, {
+              method: 'POST', keepalive: true, headers: { Authorization: `tma ${initData}` },
+            }).catch(() => toast('Отметка «позвали» не сохранилась'));
+            openLink(whatsappUrl(r.patient.phone, recallText(r.patient.fullName, settings.clinicSignature)));
+            invited.textContent = ' · позвали сегодня';
+          },
+        }, 'WhatsApp'),
+        h('button', {
+          type: 'button', class: 'btn primary', onclick: () => newScreen({ date: todayIn(), patient: r.patient }),
+        }, 'Записать')));
+  };
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Позвать на профосмотр'),
+    h('p', { class: 'hint' }, 'Были больше полугода назад и никуда не записаны. Сначала — кого ещё не звали.'),
+    due.length ? due.map(item) : h('div', { class: 'message hint' }, 'Звать некого — все записаны или были недавно')));
 }
 
 // ---------- Статистика ----------

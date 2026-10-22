@@ -47,6 +47,12 @@ class AppointmentController {
 		return service.weeklyStats(Math.clamp(weeks, 1, 52));
 	}
 
+	/** {@code /api/appointments/recall?months=6}: кого пора позвать на профосмотр. */
+	@GetMapping("/recall")
+	List<RecallView> recall(@RequestParam(defaultValue = "6") int months) {
+		return service.recall(Math.clamp(months, 1, 36));
+	}
+
 	/** Карточка пациента живёт здесь, а не в модуле пациентов: пациенты о приёмах не знают. */
 	@GetMapping("/by-patient/{patientId}")
 	PatientCard card(@PathVariable long patientId) {

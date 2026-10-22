@@ -198,3 +198,26 @@ export function noShowsPhrase(n) {
     : mod10 === 1 ? 'неявка' : mod10 >= 2 && mod10 <= 4 ? 'неявки' : 'неявок';
   return `${number} ${word}`;
 }
+
+// ---------- Профосмотры ----------
+
+/** Приглашение на профосмотр в WhatsApp. */
+export function recallText(fullName, signature = '') {
+  const text = `Здравствуйте, ${fullName}! Прошло больше полугода с вашего визита к стоматологу — `
+    + 'пора на профилактический осмотр. Ответьте, когда вам удобно, — запишем.';
+  return signature ? `${text} ${signature}` : text;
+}
+
+/** «сегодня», «вчера», «5 дней назад», «2 мес назад» — по Бишкеку. */
+export function agoText(instant, now = new Date()) {
+  const days = Math.round((new Date(`${todayIn(now)}T00:00:00Z`) - new Date(`${dateOf(instant)}T00:00:00Z`)) / 86400000);
+  if (days <= 0) return 'сегодня';
+  if (days === 1) return 'вчера';
+  if (days < 60) {
+    const mod100 = days % 100;
+    const mod10 = days % 10;
+    const word = mod100 >= 11 && mod100 <= 14 ? 'дней' : mod10 === 1 ? 'день' : mod10 >= 2 && mod10 <= 4 ? 'дня' : 'дней';
+    return `${days} ${word} назад`;
+  }
+  return `${Math.floor(days / 30)} мес назад`;
+}

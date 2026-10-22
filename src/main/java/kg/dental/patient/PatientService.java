@@ -63,6 +63,12 @@ public class PatientService {
 		return PatientView.of(patients.saveAndFlush(patient));
 	}
 
+	/** Кнопка WhatsApp «пора на осмотр» нажата — запомнить, чтобы не звать дважды. */
+	@Transactional
+	public void markRecallInvited(long id) {
+		require(id).markRecallInvited(clock.instant());
+	}
+
 	private record Valid(String fullName, String phone) {
 	}
 

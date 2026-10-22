@@ -38,6 +38,13 @@ class PatientController {
 		return service.create(request);
 	}
 
+	/** Кнопка WhatsApp «пора на осмотр»: шлётся с keepalive до перехода в WhatsApp. */
+	@PostMapping("/{id}/recall-invited")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	void recallInvited(@PathVariable long id) {
+		service.markRecallInvited(id);
+	}
+
 	@PutMapping("/{id}")
 	PatientView update(@PathVariable long id, @Valid @RequestBody PatientRequest request) {
 		return service.update(id, request);

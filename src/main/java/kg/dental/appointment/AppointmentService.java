@@ -37,13 +37,25 @@ public class AppointmentService {
 
 	private final AppointmentStatsQuery stats;
 
+	private final RecallQuery recall;
+
 	AppointmentService(AppointmentRepository appointments, PatientService patients, Clock clock,
-			DentalProperties properties, AppointmentStatsQuery stats) {
+			DentalProperties properties, AppointmentStatsQuery stats, RecallQuery recall) {
 		this.appointments = appointments;
 		this.patients = patients;
 		this.clock = clock;
 		this.properties = properties;
 		this.stats = stats;
+		this.recall = recall;
+	}
+
+	/** Кого пора позвать на профосмотр: последний визит больше {@code months} месяцев назад. */
+	@Transactional(readOnly = true)
+	public List<RecallView> recall(int months) {
+		var now = clock.instant();
+		var before = LocalDate.ofInstant(now, properties.timeZone()).minusMonths(months)
+			.atStartOfDay(properties.timeZone()).toInstant();
+		return recall.due(before, now);
 	}
 
 	/** Неявки и приёмы по неделям — сравнить с тем, что было до приложения (2–3 неявки в неделю). */

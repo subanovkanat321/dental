@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   rowState, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
-  dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
+  dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
 const NOW = new Date('2099-06-01T06:00:00Z'); // 12:00 по Бишкеку
@@ -160,4 +160,16 @@ test('статистика: подпись недели, процент неяв
 test('склонение «неявка»', () => {
   assert.deepEqual([0, 1, 2, 5, 11, 21, 1.5].map(noShowsPhrase),
     ['0 неявок', '1 неявка', '2 неявки', '5 неявок', '11 неявок', '21 неявка', '1,5 неявки']);
+});
+
+test('профосмотр: текст и «сколько назад»', () => {
+  assert.equal(recallText('Айгуль Т.', 'Клиника'), 'Здравствуйте, Айгуль Т.! Прошло больше полугода с вашего визита '
+    + 'к стоматологу — пора на профилактический осмотр. Ответьте, когда вам удобно, — запишем. Клиника');
+  const now = new Date('2099-06-10T06:00:00Z');
+  assert.equal(agoText('2099-06-10T01:00:00Z', now), 'сегодня');
+  assert.equal(agoText('2099-06-09T06:00:00Z', now), 'вчера');
+  assert.equal(agoText('2099-06-05T06:00:00Z', now), '5 дней назад');
+  assert.equal(agoText('2099-05-19T06:00:00Z', now), '22 дня назад');
+  assert.equal(agoText('2099-05-29T06:00:00Z', now), '12 дней назад');
+  assert.equal(agoText('2098-12-01T06:00:00Z', now), '6 мес назад');
 });

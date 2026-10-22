@@ -25,6 +25,9 @@ public class Patient {
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
+	/** Когда последний раз позвали на профосмотр (V3__recall.sql); null — не звали. */
+	private Instant recallInvitedAt;
+
 	protected Patient() {
 		// для JPA
 	}
@@ -33,6 +36,10 @@ public class Patient {
 		this.fullName = fullName;
 		this.phone = phone;
 		this.createdAt = createdAt;
+	}
+
+	void markRecallInvited(Instant at) {
+		this.recallInvitedAt = at;
 	}
 
 	void rename(String fullName, String phone) {
