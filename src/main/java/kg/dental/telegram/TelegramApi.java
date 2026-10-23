@@ -25,7 +25,14 @@ public final class TelegramApi {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	public record Message(@JsonProperty("message_id") long messageId, User from, Chat chat, String text) {
+	public record Message(@JsonProperty("message_id") long messageId, User from, Chat chat, String text,
+			Contact contact) {
+	}
+
+	/** Номер, которым человек поделился (кнопка «Поделиться номером» в Mini App или боте). */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	public record Contact(@JsonProperty("phone_number") String phoneNumber, @JsonProperty("first_name") String firstName,
+			@JsonProperty("user_id") Long userId) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)

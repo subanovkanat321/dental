@@ -25,14 +25,19 @@ import tools.jackson.databind.json.JsonMapper;
  * <li>нет заголовка, подпись не та или вход старше 24 ч — 401 «откройте заново из бота»;</li>
  * <li>подпись верна, но id не в ALLOWED_TELEGRAM_IDS — 403 с тем же текстом, что бот пишет
  * посторонним (DD13): ни одного байта расписания.</li>
+ * <li>исключение — {@code /api/patient/**} (самозапись): туда пускает любого, кого подписал
+ * Telegram; кто он — атрибут {@link #TELEGRAM_ID}, а не данные из запроса.</li>
  * </ul>
  * Фильтр, а не проверка в контроллерах: нельзя забыть её в новом контроллере.
  * Без токена бота не пускает никого (fail closed), а не всех.
  */
 @Component
-class InitDataAuthFilter extends OncePerRequestFilter {
+public class InitDataAuthFilter extends OncePerRequestFilter {
 
 	static final String SCHEME = "tma ";
+
+	/** Самозапись: открыта любому, кого подписал Telegram. */
+	static final String PATIENT_API = "/api/patient/";
 
 	static final String SESSION_EXPIRED = "Сессия устарела — откройте заново из бота";
 
@@ -70,7 +75,8 @@ class InitDataAuthFilter extends OncePerRequestFilter {
 			problem(response, HttpStatus.UNAUTHORIZED, SESSION_EXPIRED);
 			return;
 		}
-		if (!properties.isAllowed(userId.getAsLong())) {
+		var patientApi = request.getRequestURI().startsWith(request.getContextPath() + PATIENT_API);
+		if (!patientApi && !properties.isAllowed(userId.getAsLong())) {
 			problem(response, HttpStatus.FORBIDDEN, BotTexts.stranger(properties.clinicContact()));
 			return;
 		}

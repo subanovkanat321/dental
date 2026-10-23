@@ -33,6 +33,11 @@ dental:
   # времени. Записать вне их можно — через «Другое время». Обед и разные часы по дням — не в v1
   work-hours: ${WORK_HOURS:09:00-18:00}
   work-days: ${WORK_DAYS:MON-SUN}
+  # Самозапись пациентов через бота (PATIENT_BOOKING=false — выключить)
+  booking:
+    enabled: ${PATIENT_BOOKING:true}
+    min-lead: 2h
+    days-ahead: 30
   # Когда бот пишет врачу (по Бишкеку). before-minutes: 0 — не предупреждать перед приёмом
   notify:
     morning-time: ${MORNING_DIGEST_TIME:09:00}

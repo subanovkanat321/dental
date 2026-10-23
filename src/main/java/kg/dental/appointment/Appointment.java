@@ -3,6 +3,7 @@ package kg.dental.appointment;
 import static kg.dental.appointment.AppointmentStatus.CANCELLED;
 import static kg.dental.appointment.AppointmentStatus.DONE;
 import static kg.dental.appointment.AppointmentStatus.NO_SHOW;
+import static kg.dental.appointment.AppointmentStatus.REQUESTED;
 import static kg.dental.appointment.AppointmentStatus.SCHEDULED;
 
 import java.time.Duration;
@@ -20,6 +21,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Version;
 import kg.dental.patient.Patient;
+import kg.dental.servicetype.ServiceType;
 import kg.dental.shared.ConflictException;
 
 /**
@@ -65,6 +67,20 @@ public class Appointment {
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
+	/** Кто записал: врач или пациент сам через бота (V5). */
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false, updatable = false)
+	private Source source;
+
+	/** Услуга — у самозаписи всегда, у записи врачом её нет. */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "service_type_id")
+	private ServiceType serviceType;
+
+	public enum Source {
+		DOCTOR, PATIENT
+	}
+
 	protected Appointment() {
 		// для JPA
 	}
@@ -76,6 +92,17 @@ public class Appointment {
 		this.status = SCHEDULED;
 		this.reply = PatientReply.NONE;
 		this.createdAt = createdAt;
+		this.source = Source.DOCTOR;
+	}
+
+	/** Заявка пациента из бота: время занято сразу, врач подтверждает или отклоняет. */
+	static Appointment requested(Patient patient, Instant startAt, ServiceType serviceType, Instant createdAt) {
+		var appointment = new Appointment(patient, startAt, Duration.ofMinutes(serviceType.getDurationMinutes()),
+				createdAt);
+		appointment.status = REQUESTED;
+		appointment.source = Source.PATIENT;
+		appointment.serviceType = serviceType;
+		return appointment;
 	}
 
 	/**
@@ -83,7 +110,9 @@ public class Appointment {
 	 * о новом пациента нужно предупредить заново.
 	 */
 	void reschedule(Instant newStart, Duration duration) {
-		requireStatus(SCHEDULED, "Перенести можно только запланированный приём");
+		if (status != SCHEDULED && status != REQUESTED) {
+			throw invalidTransition("Перенести можно только запланированный приём или заявку");
+		}
 		this.startAt = newStart;
 		this.endAt = newStart.plus(duration);
 		this.reply = PatientReply.NONE;
@@ -98,6 +127,7 @@ public class Appointment {
 	/**
 	 * Переходы из карточки приёма:
 	 * <pre>
+	 * REQUESTED → SCHEDULED | CANCELLED     «Подтвердить» / «Отклонить» заявку пациента
 	 * SCHEDULED → CANCELLED                 «Отменить приём»
 	 * SCHEDULED → DONE | NO_SHOW            «Пришёл» / «Не пришёл», только сегодня и раньше
 	 * CANCELLED → SCHEDULED                 «Восстановить»: ответ и напоминание сбрасываются
@@ -110,6 +140,8 @@ public class Appointment {
 	 */
 	void changeStatus(AppointmentStatus target, Instant startOfTomorrow) {
 		var allowed = switch (status) {
+			// Заявка: «Подтвердить» или «Отклонить»
+			case REQUESTED -> target == SCHEDULED || target == CANCELLED;
 			case SCHEDULED -> target == CANCELLED || target == DONE || target == NO_SHOW;
 			case CANCELLED -> target == SCHEDULED;
 			case DONE -> target == NO_SHOW;
@@ -137,9 +169,9 @@ public class Appointment {
 	 */
 	void undo(AppointmentStatus previousStatus) {
 		var possible = switch (status) {
-			case CANCELLED -> previousStatus == SCHEDULED;
+			case CANCELLED -> previousStatus == SCHEDULED || previousStatus == REQUESTED;
 			case NO_SHOW -> previousStatus == SCHEDULED || previousStatus == DONE;
-			case SCHEDULED, DONE -> false;
+			case REQUESTED, SCHEDULED, DONE -> false;
 		};
 		if (!possible) {
 			throw invalidTransition("Вернуть можно только отмену приёма или отметку «не пришёл»");
@@ -183,6 +215,14 @@ public class Appointment {
 
 	public Instant getReminderOpenedAt() {
 		return reminderOpenedAt;
+	}
+
+	public Source getSource() {
+		return source;
+	}
+
+	public ServiceType getServiceType() {
+		return serviceType;
 	}
 
 	public Long getVersion() {

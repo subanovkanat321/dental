@@ -43,10 +43,12 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 			where a.patient.id = :patientId order by a.startAt desc, a.id desc""")
 	List<Appointment> findByPatient(long patientId);
 
-	/** Ближайшие запланированные приёмы этих пациентов, по возрастанию — для листа ожидания. */
+	/** Ближайшие запланированные приёмы и заявки этих пациентов, по возрастанию. */
 	@Query("""
 			select a from Appointment a join fetch a.patient
-			where a.patient.id in :patientIds and a.status = kg.dental.appointment.AppointmentStatus.SCHEDULED
+			where a.patient.id in :patientIds
+			and a.status in (kg.dental.appointment.AppointmentStatus.SCHEDULED,
+			                 kg.dental.appointment.AppointmentStatus.REQUESTED)
 			and a.endAt > :now order by a.startAt""")
 	List<Appointment> findUpcoming(Collection<Long> patientIds, Instant now);
 

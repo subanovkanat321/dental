@@ -78,7 +78,8 @@ class SlotApiTests {
 		var booked = book("2099-06-01T04:00:00Z").getResponse().getStatus() == HttpStatus.CREATED.value();
 
 		assertThat(offered).as("сетка предлагает 10:00 при статусе %s", status).isEqualTo(booked);
-		var occupies = status == AppointmentStatus.SCHEDULED || status == AppointmentStatus.DONE;
+		// Время занимают все, кроме отменённых и неявок, — и заявка пациента тоже (V5)
+		var occupies = status != AppointmentStatus.CANCELLED && status != AppointmentStatus.NO_SHOW;
 		assertThat(offered).isEqualTo(!occupies);
 	}
 

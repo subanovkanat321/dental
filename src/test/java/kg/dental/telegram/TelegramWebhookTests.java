@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import java.net.URI;
+import java.util.List;
 
 import kg.dental.AssetVersion;
 import kg.dental.IntegrationTest;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
@@ -35,6 +37,9 @@ class TelegramWebhookTests {
 
 	@Autowired
 	AssetVersion version;
+
+	@Autowired
+	JdbcTemplate jdbc;
 
 	@Test
 	void wrongOrMissingSecretIs401AndNothingHappens() {
@@ -55,12 +60,30 @@ class TelegramWebhookTests {
 	}
 
 	@Test
-	void strangerStartGetsClinicContactOnly() {
+	void strangerStartGetsBookingButtonAndMenu() {
 		assertThat(webhook(SECRET, start(TestInitData.STRANGER_ID))).hasStatusOk();
 
-		verify(telegram).sendMessage(TestInitData.STRANGER_ID,
-				"Это служебный бот записи клиники. Записаться на приём: +996 555 000 000");
+		var url = URI.create("https://dental.test/?v=" + version.value());
+		verify(telegram).sendMessage(TestInitData.STRANGER_ID, "Здравствуйте! Это бот записи к стоматологу. "
+				+ "Нажмите «Записаться на приём» — выберите услугу и свободное время. Телефон клиники: +996 555 000 000",
+				List.of(new TelegramClient.Button("Записаться на приём", url)));
+		verify(telegram).setChatMenuButton(TestInitData.STRANGER_ID, "Записаться", url);
 		verifyNoMoreInteractions(telegram);
+	}
+
+	@Test
+	void ownContactIsSavedForBookingForeignIsNot() {
+		assertThat(webhook(SECRET, contact(TestInitData.STRANGER_ID, TestInitData.STRANGER_ID, "996700112233")))
+			.hasStatusOk();
+		verify(telegram).sendMessage(TestInitData.STRANGER_ID,
+				"Спасибо, номер получен. Вернитесь в приложение и завершите запись.");
+		assertThat(jdbc.queryForObject("select phone from telegram_contact where telegram_id = ?", String.class,
+				TestInitData.STRANGER_ID)).isEqualTo("996700112233");
+
+		// Чужой контакт из записной книжки — user_id другой: не сохраняем
+		assertThat(webhook(SECRET, contact(TestInitData.STRANGER_ID + 1, 42, "996555000111"))).hasStatusOk();
+		assertThat(jdbc.queryForObject("select count(*) from telegram_contact where telegram_id = ?", Integer.class,
+				TestInitData.STRANGER_ID + 1)).isZero();
 	}
 
 	@Test
@@ -98,6 +121,15 @@ class TelegramWebhookTests {
 	private MvcTestResult webhook(String secret, String body) {
 		return mvc.post().uri("/telegram/webhook").header(TelegramWebhookController.SECRET_HEADER, secret)
 			.contentType(MediaType.APPLICATION_JSON).content(body).exchange();
+	}
+
+	private static String contact(long fromId, long contactUserId, String phone) {
+		return """
+				{"update_id": 2, "message": {"message_id": 6, "date": 1767225600,
+				 "from": {"id": %d, "is_bot": false, "first_name": "Test"},
+				 "chat": {"id": %d, "type": "private"},
+				 "contact": {"phone_number": "%s", "first_name": "Test", "user_id": %d}}}"""
+			.formatted(fromId, fromId, phone, contactUserId);
 	}
 
 	private static String start(long userId) {

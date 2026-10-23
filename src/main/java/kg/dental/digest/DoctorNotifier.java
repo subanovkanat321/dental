@@ -18,10 +18,10 @@ import org.springframework.stereotype.Component;
  * /start) — остальным всё равно уходит.
  */
 @Component
-class DoctorNotifier {
+public class DoctorNotifier {
 
 	/** Кнопка: подпись и параметры адреса Mini App («day=tomorrow»), null — главный экран. */
-	record Link(String text, String query) {
+	public record Link(String text, String query) {
 	}
 
 	private static final Logger log = LoggerFactory.getLogger(DoctorNotifier.class);
@@ -39,17 +39,12 @@ class DoctorNotifier {
 	}
 
 	/** Бот включён и настроен — расписанию есть смысл работать. */
-	boolean enabled() {
+	public boolean enabled() {
 		return properties.mode() != Mode.OFF && properties.configured();
 	}
 
-	void send(String kind, String text, List<Link> links) {
-		var url = properties.publicUrl();
-		var buttons = new ArrayList<TelegramClient.Button>();
-		// Mini App открывается только по https: без него — сообщение без кнопок
-		if (url != null && "https".equals(url.getScheme())) {
-			links.forEach(l -> buttons.add(new TelegramClient.Button(l.text(), version.miniApp(url, l.query()))));
-		}
+	public void send(String kind, String text, List<Link> links) {
+		var buttons = buttons(links);
 		var sent = 0;
 		for (var chatId : properties.allowedIds()) {
 			try {
@@ -61,6 +56,27 @@ class DoctorNotifier {
 			}
 		}
 		log.info("{}: отправлено {} из {}", kind, sent, properties.allowedIds().size());
+	}
+
+	/** Пациенту — ответ о его заявке (самозапись). Не доставлено — только в лог. */
+	public void sendToPatient(long telegramId, String kind, String text, List<Link> links) {
+		try {
+			telegram.sendMessage(telegramId, text, buttons(links));
+			log.info("{}: отправлено пациенту", kind);
+		}
+		catch (TelegramException e) {
+			log.warn("{}: пациенту не доставлено: {}", kind, e.getMessage());
+		}
+	}
+
+	private List<TelegramClient.Button> buttons(List<Link> links) {
+		var url = properties.publicUrl();
+		var buttons = new ArrayList<TelegramClient.Button>();
+		// Mini App открывается только по https: без него — сообщение без кнопок
+		if (url != null && "https".equals(url.getScheme())) {
+			links.forEach(l -> buttons.add(new TelegramClient.Button(l.text(), version.miniApp(url, l.query()))));
+		}
+		return buttons;
 	}
 
 }

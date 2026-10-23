@@ -28,6 +28,12 @@ public class Patient {
 	/** Когда последний раз позвали на профосмотр (V3__recall.sql); null — не звали. */
 	private Instant recallInvitedAt;
 
+	/** Telegram id, если пациент записывался сам через бота (V5): по нему бот ему отвечает. */
+	private Long telegramId;
+
+	/** Когда пациент дал согласие на обработку персональных данных (самозапись, V5). */
+	private Instant consentAt;
+
 	protected Patient() {
 		// для JPA
 	}
@@ -36,6 +42,16 @@ public class Patient {
 		this.fullName = fullName;
 		this.phone = phone;
 		this.createdAt = createdAt;
+	}
+
+	/** Самозапись: привязать Telegram и запомнить согласие. */
+	void linkTelegram(long telegramId, Instant consentAt) {
+		this.telegramId = telegramId;
+		this.consentAt = consentAt;
+	}
+
+	public Long getTelegramId() {
+		return telegramId;
 	}
 
 	void markRecallInvited(Instant at) {

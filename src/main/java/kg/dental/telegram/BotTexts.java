@@ -10,7 +10,18 @@ public final class BotTexts {
 	private BotTexts() {
 	}
 
-	/** Постороннему: ни данных, ни кнопки — только как записаться. */
+	static final String BOOK_BUTTON = "Записаться на приём";
+
+	static final String CONTACT_SAVED = "Спасибо, номер получен. Вернитесь в приложение и завершите запись.";
+
+	/** Постороннему при включённой самозаписи: как записаться через приложение. */
+	static String patientWelcome(String clinicContact) {
+		var text = "Здравствуйте! Это бот записи к стоматологу. Нажмите «Записаться на приём» — "
+				+ "выберите услугу и свободное время.";
+		return clinicContact.isEmpty() ? text : text + " Телефон клиники: " + clinicContact;
+	}
+
+	/** Постороннему без самозаписи: ни данных, ни кнопки — только как записаться. */
 	public static String stranger(String clinicContact) {
 		var text = "Это служебный бот записи клиники.";
 		return clinicContact.isEmpty() ? text : text + " Записаться на приём: " + clinicContact;

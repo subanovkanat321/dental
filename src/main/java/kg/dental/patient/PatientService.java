@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 import kg.dental.shared.ConflictException;
@@ -26,9 +27,79 @@ public class PatientService {
 
 	private final Clock clock;
 
-	PatientService(PatientRepository patients, Clock clock) {
+	private final TelegramContactRepository contacts;
+
+	PatientService(PatientRepository patients, Clock clock, TelegramContactRepository contacts) {
 		this.patients = patients;
 		this.clock = clock;
+		this.contacts = contacts;
+	}
+
+	/** Профиль человека в боте: имя и номер, если он уже делился номером или записывался. */
+	public record BotProfile(String fullName, String phone) {
+	}
+
+	/**
+	 * Человек поделился номером в боте. Номер от Telegram — цифры без «+» в любом формате,
+	 * поэтому нормализуем как международный.
+	 *
+	 * @return false — номер не похож на телефон (не сохраняем)
+	 */
+	@Transactional
+	public boolean saveContact(long telegramId, String rawPhone, String firstName) {
+		var digits = rawPhone == null ? "" : rawPhone.replaceAll("[^0-9]", "");
+		var phone = PhoneNumbers.normalize("+" + digits);
+		if (phone.isEmpty()) {
+			return false;
+		}
+		contacts.save(new TelegramContact(telegramId, phone.get(), firstName, clock.instant()));
+		return true;
+	}
+
+	/** Что знаем о человеке в боте: сначала его карточка пациента, иначе — поделённый номер. */
+	@Transactional(readOnly = true)
+	public Optional<BotProfile> botProfile(long telegramId) {
+		var patient = patients.findByTelegramId(telegramId);
+		if (patient.isPresent()) {
+			return patient.map(p -> new BotProfile(p.getFullName(), p.getPhone()));
+		}
+		return contacts.findById(telegramId).map(c -> new BotProfile(c.getFirstName(), c.getPhone()));
+	}
+
+	/**
+	 * Пациент для самозаписи: тот, кто уже записывался из этого Telegram; иначе — карточка,
+	 * которую завёл врач (тот же номер и то же имя); иначе — новый. Телефон — только тот,
+	 * которым человек поделился в Telegram.
+	 */
+	@Transactional
+	public Patient forSelfBooking(long telegramId, String rawFullName) {
+		var contact = contacts.findById(telegramId)
+			.orElseThrow(() -> new InvalidFieldException("phone", "Поделитесь номером телефона"));
+		var fullName = SPACES.matcher(rawFullName == null ? "" : rawFullName.strip()).replaceAll(" ");
+		if (fullName.isEmpty() || fullName.length() > 200) {
+			throw new InvalidFieldException("fullName", "Укажите имя пациента");
+		}
+		var now = clock.instant();
+		var patient = patients.findByTelegramId(telegramId)
+			.or(() -> patients.findByPhone(contact.getPhone())
+				.stream()
+				.filter(p -> p.getTelegramId() == null && sameName(p.getFullName(), fullName))
+				.findFirst())
+			.orElseGet(() -> patients.save(new Patient(fullName, contact.getPhone(), now)));
+		patient.rename(fullName, contact.getPhone());
+		patient.linkTelegram(telegramId, now);
+		return patients.saveAndFlush(patient);
+	}
+
+	/** Telegram id пациента, если он записывался сам, — чтобы бот ответил ему о заявке. */
+	@Transactional(readOnly = true)
+	public Optional<Long> telegramIdOf(long patientId) {
+		return patients.findById(patientId).map(Patient::getTelegramId);
+	}
+
+	@Transactional(readOnly = true)
+	public Optional<Patient> byTelegram(long telegramId) {
+		return patients.findByTelegramId(telegramId);
 	}
 
 	/**

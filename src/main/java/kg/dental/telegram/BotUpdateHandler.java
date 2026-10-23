@@ -1,6 +1,10 @@
 package kg.dental.telegram;
 
+import java.util.List;
+
 import kg.dental.AssetVersion;
+import kg.dental.BookingProperties;
+import kg.dental.patient.PatientService;
 import kg.dental.telegram.TelegramApi.Update;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,10 +26,17 @@ class BotUpdateHandler {
 
 	private final AssetVersion version;
 
-	BotUpdateHandler(TelegramClient telegram, TelegramProperties properties, AssetVersion version) {
+	private final BookingProperties booking;
+
+	private final PatientService patients;
+
+	BotUpdateHandler(TelegramClient telegram, TelegramProperties properties, AssetVersion version,
+			BookingProperties booking, PatientService patients) {
 		this.telegram = telegram;
 		this.properties = properties;
 		this.version = version;
+		this.booking = booking;
+		this.patients = patients;
 	}
 
 	/**
@@ -55,10 +66,19 @@ class BotUpdateHandler {
 			return;
 		}
 		var chatId = message.chat().id();
+		// Поделился номером для самозаписи. Только свой номер: user_id контакта — тот же, кто пишет,
+		// иначе можно было бы прислать чужой контакт из записной книжки
+		var contact = message.contact();
+		if (contact != null && contact.userId() != null && contact.userId() == message.from().id()) {
+			if (patients.saveContact(message.from().id(), contact.phoneNumber(), contact.firstName())) {
+				telegram.sendMessage(chatId, BotTexts.CONTACT_SAVED);
+			}
+			return;
+		}
 		var start = message.text() != null && message.text().strip().startsWith("/start");
 		if (!properties.isAllowed(message.from().id())) {
 			if (start) {
-				telegram.sendMessage(chatId, BotTexts.stranger(properties.clinicContact()));
+				greetPatient(chatId);
 			}
 			return;
 		}
@@ -76,6 +96,18 @@ class BotUpdateHandler {
 		else {
 			log.info("Кнопка Mini App не установлена: dental.telegram.public-url не https (update {})", updateId);
 		}
+	}
+
+	/** Постороннему: кнопка самозаписи, если она включена и Mini App доступна; иначе — контакт клиники. */
+	private void greetPatient(long chatId) {
+		if (!booking.enabled() || !miniAppAvailable()) {
+			telegram.sendMessage(chatId, BotTexts.stranger(properties.clinicContact()));
+			return;
+		}
+		var url = version.miniApp(properties.publicUrl(), null);
+		telegram.sendMessage(chatId, BotTexts.patientWelcome(properties.clinicContact()),
+				List.of(new TelegramClient.Button(BotTexts.BOOK_BUTTON, url)));
+		telegram.setChatMenuButton(chatId, "Записаться", url);
 	}
 
 	private void setMenuButton(long chatId) {

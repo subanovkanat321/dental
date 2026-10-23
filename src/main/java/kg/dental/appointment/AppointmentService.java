@@ -16,6 +16,9 @@ import kg.dental.patient.PatientService;
 import kg.dental.patient.PatientView;
 import kg.dental.shared.ConflictException;
 import kg.dental.shared.NotFoundException;
+import kg.dental.patient.Patient;
+import kg.dental.servicetype.ServiceType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -41,8 +44,11 @@ public class AppointmentService {
 
 	private final PreNoticeQuery preNotices;
 
+	private final ApplicationEventPublisher events;
+
 	AppointmentService(AppointmentRepository appointments, PatientService patients, Clock clock,
-			DentalProperties properties, AppointmentStatsQuery stats, RecallQuery recall, PreNoticeQuery preNotices) {
+			DentalProperties properties, AppointmentStatsQuery stats, RecallQuery recall, PreNoticeQuery preNotices,
+			ApplicationEventPublisher events) {
 		this.appointments = appointments;
 		this.patients = patients;
 		this.clock = clock;
@@ -50,6 +56,7 @@ public class AppointmentService {
 		this.stats = stats;
 		this.recall = recall;
 		this.preNotices = preNotices;
+		this.events = events;
 	}
 
 	/** Обзор дня для уведомлений врачу: только числа и время. */
@@ -175,7 +182,26 @@ public class AppointmentService {
 	@Transactional
 	public AppointmentView changeStatus(long id, AppointmentRequests.ChangeStatus request) {
 		var appointment = require(id, request.version());
+		var wasRequest = appointment.getStatus() == AppointmentStatus.REQUESTED;
 		appointment.changeStatus(request.status(), startOfTomorrow());
+		var saved = save(appointment);
+		if (wasRequest) {
+			events.publishEvent(new RequestDecided(id, request.status() == AppointmentStatus.SCHEDULED));
+		}
+		return saved;
+	}
+
+	/** Заявка пациента из бота (модуль booking): время проверяет база, как у любой записи. */
+	@Transactional
+	public AppointmentView request(Patient patient, Instant startAt, ServiceType serviceType) {
+		return save(Appointment.requested(patient, startAt, serviceType, clock.instant()));
+	}
+
+	/** Пациент сам отменяет свою заявку или запись — без версии: у него нет экрана врача. */
+	@Transactional
+	public AppointmentView cancelByPatient(long id) {
+		var appointment = require(id);
+		appointment.changeStatus(AppointmentStatus.CANCELLED, startOfTomorrow());
 		return save(appointment);
 	}
 
