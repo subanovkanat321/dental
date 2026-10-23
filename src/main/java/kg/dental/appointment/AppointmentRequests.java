@@ -20,7 +20,8 @@ public final class AppointmentRequests {
 	private AppointmentRequests() {
 	}
 
-	public record Create(@NotNull(message = "Выберите пациента") Long patientId,
+	public record Create(@NotNull(message = "Выберите врача") Long doctorId,
+			@NotNull(message = "Выберите пациента") Long patientId,
 			@NotNull(message = "Выберите время") Instant startAt,
 			@NotNull(message = DURATION_MESSAGE) @Min(value = 15, message = DURATION_MESSAGE)
 			@Max(value = 240, message = DURATION_MESSAGE) Integer durationMinutes) {

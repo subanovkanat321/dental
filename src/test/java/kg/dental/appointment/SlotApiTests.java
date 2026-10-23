@@ -104,18 +104,18 @@ class SlotApiTests {
 			.bodyJson()
 			.extractingPath("$.errors[0].field")
 			.isEqualTo("durationMinutes");
-		assertThat(mvc.get().uri("/api/slots?date=" + DAY)).hasStatus(HttpStatus.UNAUTHORIZED);
+		assertThat(mvc.get().uri("/api/slots?doctorId=1&date=" + DAY)).hasStatus(HttpStatus.UNAUTHORIZED);
 	}
 
 	private MvcTestResult slots(String query) {
-		return mvc.get().uri("/api/slots" + query).header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
+		return mvc.get().uri("/api/slots" + query + "&doctorId=1").header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
 	}
 
 	private MvcTestResult book(String startAt) {
 		return mvc.post().uri("/api/appointments").header(HttpHeaders.AUTHORIZATION, TestInitData.doctor())
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
-					{"patientId": %d, "startAt": "%s", "durationMinutes": 30}""".formatted(patientId, startAt))
+					{"doctorId": 1, "patientId": %d, "startAt": "%s", "durationMinutes": 30}""".formatted(patientId, startAt))
 			.exchange();
 	}
 
@@ -130,8 +130,8 @@ class SlotApiTests {
 
 	private long insert(String start, String end, String status) {
 		return jdbc.queryForObject("""
-				insert into appointment (patient_id, start_at, end_at, status)
-				values (?, ?::timestamptz, ?::timestamptz, ?) returning id""", Long.class, patientId, start, end, status);
+				insert into appointment (doctor_id, patient_id, start_at, end_at, status)
+				values (1, ?, ?::timestamptz, ?::timestamptz, ?) returning id""", Long.class, patientId, start, end, status);
 	}
 
 }

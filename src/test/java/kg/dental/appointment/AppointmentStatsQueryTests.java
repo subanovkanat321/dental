@@ -48,7 +48,7 @@ class AppointmentStatsQueryTests {
 		insert("2099-05-31T17:00:00Z", "DONE", true); // вс 23:00 по Бишкеку
 		insert("2099-05-26T04:00:00Z", "NO_SHOW", false);
 
-		var weeks = query.weeks(3, NOW, BISHKEK);
+		var weeks = query.weeks(3, NOW, BISHKEK, null);
 
 		assertThat(weeks).extracting(WeekStats::weekStart)
 			.containsExactly(LocalDate.of(2099, 6, 1), LocalDate.of(2099, 5, 25), LocalDate.of(2099, 5, 18));
@@ -60,8 +60,8 @@ class AppointmentStatsQueryTests {
 	private void insert(String start, String status, boolean reminded) {
 		var startAt = Instant.parse(start);
 		jdbc.update("""
-				insert into appointment (patient_id, start_at, end_at, status, reminder_opened_at)
-				values (?, ?, ?, ?, ?)""", patientId, Timestamp.from(startAt), Timestamp.from(startAt.plusSeconds(1800)),
+				insert into appointment (doctor_id, patient_id, start_at, end_at, status, reminder_opened_at)
+				values (1, ?, ?, ?, ?, ?)""", patientId, Timestamp.from(startAt), Timestamp.from(startAt.plusSeconds(1800)),
 				status, reminded ? Timestamp.from(startAt.minusSeconds(86400)) : null);
 	}
 

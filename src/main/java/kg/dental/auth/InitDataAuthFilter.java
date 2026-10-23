@@ -9,6 +9,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import kg.dental.doctor.Staff;
 import kg.dental.telegram.BotTexts;
 import kg.dental.telegram.TelegramProperties;
 import org.springframework.http.HttpHeaders;
@@ -52,8 +53,11 @@ public class InitDataAuthFilter extends OncePerRequestFilter {
 
 	private final JsonMapper json;
 
-	InitDataAuthFilter(TelegramProperties properties, Clock clock, JsonMapper json) {
+	private final Staff staff;
+
+	InitDataAuthFilter(TelegramProperties properties, Clock clock, JsonMapper json, Staff staff) {
 		this.properties = properties;
+		this.staff = staff;
 		this.validator = properties.configured()
 				? new InitDataValidator(properties.botToken(), properties.initDataMaxAge(), json) : null;
 		this.clock = clock;
@@ -76,7 +80,8 @@ public class InitDataAuthFilter extends OncePerRequestFilter {
 			return;
 		}
 		var patientApi = request.getRequestURI().startsWith(request.getContextPath() + PATIENT_API);
-		if (!patientApi && !properties.isAllowed(userId.getAsLong())) {
+		// Сотрудник — админ из ALLOWED_TELEGRAM_IDS или врач с привязанным Telegram (Меню → Врачи)
+		if (!patientApi && !staff.isStaff(userId.getAsLong())) {
 			problem(response, HttpStatus.FORBIDDEN, BotTexts.stranger(properties.clinicContact()));
 			return;
 		}

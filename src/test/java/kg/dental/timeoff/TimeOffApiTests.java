@@ -107,7 +107,7 @@ class TimeOffApiTests {
 	}
 
 	private MvcTestResult slots(String date, int duration) {
-		return mvc.get().uri("/api/slots?date=" + date + "&duration=" + duration)
+		return mvc.get().uri("/api/slots?doctorId=1&date=" + date + "&duration=" + duration)
 			.header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
 	}
 

@@ -115,8 +115,8 @@ class AutoRemindersTests {
 	private long insert(long patientId, java.time.LocalDateTime at, String status, String reply, boolean reminded) {
 		var start = at.atZone(BISHKEK).toInstant();
 		return jdbc.queryForObject("""
-				insert into appointment (patient_id, start_at, end_at, status, reply, reminder_opened_at)
-				values (?, ?, ?, ?, ?, ?) returning id""", Long.class, patientId, Timestamp.from(start),
+				insert into appointment (doctor_id, patient_id, start_at, end_at, status, reply, reminder_opened_at)
+				values (1, ?, ?, ?, ?, ?, ?) returning id""", Long.class, patientId, Timestamp.from(start),
 				Timestamp.from(start.plusSeconds(1800)), status, reply, reminded ? Timestamp.from(EVENING) : null);
 	}
 

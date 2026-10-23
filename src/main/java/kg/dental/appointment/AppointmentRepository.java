@@ -24,8 +24,9 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 	 * своё старое время ему не мешает (ER4).
 	 */
 	@Query("select new kg.dental.appointment.TimeRange(a.startAt, a.endAt) from Appointment a"
-			+ " where " + OCCUPIES_TIME + " and a.startAt < :to and a.endAt > :from and a.id <> :excludeId")
-	List<TimeRange> findBusy(Instant from, Instant to, long excludeId);
+			+ " where " + OCCUPIES_TIME + " and a.doctorId = :doctorId"
+			+ " and a.startAt < :to and a.endAt > :from and a.id <> :excludeId")
+	List<TimeRange> findBusy(long doctorId, Instant from, Instant to, long excludeId);
 
 	/**
 	 * Приёмы дня с пациентами одним запросом (T10). Без {@code join fetch} Hibernate
@@ -33,9 +34,9 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 	 */
 	@Query("""
 			select a from Appointment a join fetch a.patient
-			where a.startAt >= :from and a.startAt < :to
+			where a.doctorId = :doctorId and a.startAt >= :from and a.startAt < :to
 			order by a.startAt, a.id""")
-	List<Appointment> findDay(Instant from, Instant to);
+	List<Appointment> findDay(long doctorId, Instant from, Instant to);
 
 	/** Все приёмы пациента, новые сверху — для карточки пациента. */
 	@Query("""
@@ -55,9 +56,9 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 	/** Прошедшие приёмы без отметки «пришёл» / «не пришёл», закончившиеся в [from, to). */
 	@Query("""
 			select count(a) from Appointment a
-			where a.status = kg.dental.appointment.AppointmentStatus.SCHEDULED
+			where a.doctorId = :doctorId and a.status = kg.dental.appointment.AppointmentStatus.SCHEDULED
 			and a.endAt >= :from and a.endAt < :to""")
-	long countUnmarked(Instant from, Instant to);
+	long countUnmarked(long doctorId, Instant from, Instant to);
 
 	/**
 	 * Отметка «напоминание открыто» прямым UPDATE, без {@code @Version}: её шлёт кнопка

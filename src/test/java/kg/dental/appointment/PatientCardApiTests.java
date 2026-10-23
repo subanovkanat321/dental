@@ -87,7 +87,7 @@ class PatientCardApiTests {
 
 	private void insert(long patient, String start, String status) {
 		var startAt = Instant.parse(start);
-		jdbc.update("insert into appointment (patient_id, start_at, end_at, status) values (?, ?, ?, ?)", patient,
+		jdbc.update("insert into appointment (doctor_id, patient_id, start_at, end_at, status) values (1, ?, ?, ?, ?)", patient,
 				Timestamp.from(startAt), Timestamp.from(startAt.plusSeconds(1800)), status);
 	}
 

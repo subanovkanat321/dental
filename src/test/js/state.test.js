@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  rowState, serviceEmoji, stripDays, recordsPhrase, breakNote, timeOffWhen, priceText, ratingsPhrase, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
+  rowState, serviceEmoji, stripDays, recordsPhrase, breakNote, timeOffWhen, priceText, ratingsPhrase, initials, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
   dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, bookingDays, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
@@ -226,4 +226,18 @@ test('priceText: «от 2 000 сом», без цены — null', () => {
 
 test('ratingsPhrase: 1 оценка, 3 оценки, 12 оценок, 21 оценка', () => {
   assert.deepEqual([1, 3, 12, 21].map(ratingsPhrase), ['1 оценка', '3 оценки', '12 оценок', '21 оценка']);
+});
+
+test('initials: две буквы имени', () => {
+  assert.equal(initials('Айгерим Садыкова'), 'АС');
+  assert.equal(initials('  врач '), 'В');
+});
+
+test('fitsWindow с врачом: к другому врачу — не кандидат; к любому — кандидат', () => {
+  const window = { startAt: '2026-10-24T04:00:00Z', endAt: '2026-10-24T05:00:00Z' };
+  assert.equal(fitsWindow({ durationMinutes: 30, doctorId: 2, upcoming: null }, window, 1), false);
+  assert.equal(fitsWindow({ durationMinutes: 30, doctorId: null, upcoming: null }, window, 1), true);
+  // Записан к другому врачу позже — всё равно кандидат: в это окно будет новая запись
+  assert.equal(fitsWindow({ durationMinutes: 30, doctorId: null, upcoming: { doctorId: 2, startAt: '2026-10-20T04:00:00Z' } }, window, 1), true);
+  assert.equal(fitsWindow({ durationMinutes: 30, doctorId: 1, upcoming: { doctorId: 1, startAt: '2026-10-20T04:00:00Z' } }, window, 1), false);
 });

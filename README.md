@@ -87,6 +87,23 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 На ноутбуке: `./mvnw spring-boot:run`, затем в `e2e/`: `npm ci`, `npx playwright install chromium`,
 `npx playwright test`. Тесты чистят локальную базу.
 
+## Несколько врачей
+
+В одном кабинете несколько врачей, у каждого своё кресло (V11, таблица `doctor`):
+
+- **Админ** — Telegram из `ALLOWED_TELEGRAM_IDS` (владелец). «Меню → Врачи»: добавить врача
+  (имя, «кратко», Telegram id — врач узнаёт его у @userinfobot), скрыть, фото и профиль.
+- **Врач** с привязанным Telegram входит в приложение (кнопка «Открыть день» после `/start`),
+  по умолчанию видит свой «День»; вверху — переключатель врачей, чтобы посмотреть коллегу.
+- **Расписание**: двойная запись запрещена у одного врача (`EXCLUDE ... doctor_id with =`),
+  у разных — в одно время можно. Свободное время, лента дней, статистика и оценки — по врачу.
+- **Перерывы** — у одного врача или у всех («👥 Все врачи», например джума-намаз).
+- **Пациент** выбирает врача первым шагом (фото, имя, «кратко»); врач один — шаг пропускается.
+- **Уведомления** — врачу его приёмов. Telegram врача не привязан — админам, первой строкой
+  «🧑‍⚕️ Имя врача»; кнопки открывают «День» этого врача (`?doctor=ID`).
+- Пациенты, услуги и рабочие часы (`WORK_HOURS`, `WORK_DAYS`) — общие на кабинет.
+- После обновления до V11 все прежние приёмы — у врача №1 (имя и фото — из прежнего профиля).
+
 ## Самозапись пациентов через бота
 
 Посторонний в боте (`/start`) получает кнопку «Записаться на приём». В Mini App (`js/patient.js`):
@@ -100,9 +117,10 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 - Не раньше чем через 2 часа и не дальше 30 дней, только время из сетки, одна запись на человека;
   пациент сам видит и отменяет свою запись, чужие имена и расписание ему не видны.
 - **Цены**: у услуги можно указать цену «от» в сомах — пациент видит «от 2 000 сом» на плитке.
-- **Профиль врача** («Меню → Профиль врача»): имя, пара слов о себе и фото — в шапке экрана записи
-  вместо рисунка. Фото браузер уменьшает до 800 px (JPEG) до отправки; сервер проверяет тип по
-  первым байтам и хранит в базе (`clinic_profile`), отдаёт по `/profile/photo?v=N` без входа.
+- **Профиль врача** («Меню → Мой профиль»): имя, пара слов о себе и фото — пациент видит их,
+  когда выбирает врача, и в шапке записи. Фото браузер уменьшает до 800 px (JPEG) до отправки;
+  сервер проверяет тип по первым байтам и хранит в базе (`doctor.photo`), отдаёт по
+  `/doctors/{id}/photo?v=N` без входа.
 - **Отзывы**: на следующий день после приёма (12:00, `REVIEW_TIME`) бот спрашивает тех, кто
   записывался через бота, «Как прошёл приём?» — кнопки 1–5 ⭐. Оценка — в карточке приёма и в
   «Статистике» (средняя за 90 дней), врачу — уведомление без имени. `ASK_REVIEWS=false` — выключить.
@@ -135,11 +153,11 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 | `GET /api/appointments/stats?weeks=8` | по неделям: записано, пришли, не пришли, отменено, не отмечено, напомнили |
 | `GET /api/appointments/recall?months=6` | кого пора позвать на профосмотр |
 | `POST /api/patients/{id}/recall-invited` | кнопка WhatsApp «пора на осмотр» нажата |
-| `GET /api/patient/me`, `GET /api/patient/slots?date=&serviceTypeId=`, `POST /api/patient/booking`, `POST /api/patient/booking/cancel` | самозапись: любой, кого подписал Telegram; кто он — из initData |
+| `GET /api/patient/me`, `GET /api/patient/slots?date=&doctorId=&serviceTypeId=`, `POST /api/patient/booking`, `POST /api/patient/booking/cancel` | самозапись: любой, кого подписал Telegram; кто он — из initData |
 | `GET/POST/PUT /api/service-types` | услуги для самозаписи (врач) |
 | `GET /api/waitlist`, `POST /api/waitlist` `{patientId, durationMinutes}`, `DELETE /api/waitlist/{id}` | лист ожидания |
 | `POST /api/waitlist/{id}/book` `{startAt}` | записать или перенести в окно и убрать из листа — одной транзакцией |
-| `GET /api/appointments?date=2027-06-01` | приёмы дня по Бишкеку |
+| `GET /api/appointments?date=2027-06-01&doctorId=1` | приёмы дня врача по Бишкеку |
 | `GET /api/appointments/{id}` | один приём |
 | `POST /api/appointments` `{patientId, startAt, durationMinutes}` | запись, 15–240 мин |
 | `POST /api/appointments/{id}/reschedule` `{version, startAt, durationMinutes}` | перенос, сбрасывает ответ и отметку напоминания |
@@ -151,9 +169,10 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 | `GET /api/appointments/counts?from=&days=21` | сколько приёмов в каждый день (без отменённых) и сколько из них заявок — для ленты дней |
 | `GET/POST /api/time-off`, `DELETE /api/time-off/{id}` | перерывы и выходные: `{weekday}` или `{firstDay, lastDay}`, `startTime/endTime` (оба null — весь день), `title`, `emoji` |
 | `GET /api/appointments/ratings?days=90` | оценки пациентов: количество, средняя, по звёздам |
-| `GET/PUT /api/profile`, `POST/DELETE /api/profile/photo` | профиль врача (имя, о себе, фото multipart `photo`) |
-| `GET /profile/photo?v=N` | фото врача, без входа, кэш на год (адрес меняется с фото) |
-| `GET /api/slots?date=&duration=&exclude=` | свободные окна дня и сетка начал (шаг 15 мин) в рабочих часах |
+| `GET /api/doctors`; `GET /api/doctors/admin`, `POST /api/doctors`, `PUT /api/doctors/{id}` | врачи; заводит и привязывает Telegram только админ |
+| `PUT /api/doctors/{id}/profile`, `POST/DELETE /api/doctors/{id}/photo` | профиль и фото — сам врач или админ |
+| `GET /doctors/{id}/photo?v=N` | фото врача, без входа, кэш на год (адрес меняется с фото) |
+| `GET /api/slots?date=&doctorId=&duration=&exclude=` | свободные окна дня и сетка начал (шаг 15 мин) в рабочих часах |
 | `GET /api/settings` | подпись клиники для текста напоминания |
 
 ## Вход и бот

@@ -27,10 +27,10 @@ class PreNoticeQuery {
 				update appointment set pre_notified_at = :now
 				where status = 'SCHEDULED' and pre_notified_at is null
 				  and start_at > :now and start_at <= :until
-				returning id, start_at, end_at, reply, reminder_opened_at""")
+				returning id, doctor_id, start_at, end_at, reply, reminder_opened_at""")
 			.param("now", Timestamp.from(now))
 			.param("until", Timestamp.from(until))
-			.query((rs, n) -> new PreNotice(rs.getLong("id"), rs.getTimestamp("start_at").toInstant(),
+			.query((rs, n) -> new PreNotice(rs.getLong("id"), rs.getLong("doctor_id"), rs.getTimestamp("start_at").toInstant(),
 					rs.getTimestamp("end_at").toInstant(), PatientReply.valueOf(rs.getString("reply")),
 					rs.getTimestamp("reminder_opened_at") == null ? null
 							: rs.getTimestamp("reminder_opened_at").toInstant()))

@@ -32,12 +32,12 @@ public class TimeOffService {
 		return repository.findAllByOrderByWeekdayAscFirstDayAscStartTimeAsc().stream().map(TimeOffView::of).toList();
 	}
 
-	/** Что действует в этот день: сначала «весь день», потом по времени. */
+	/** Что действует в этот день у врача (его и общие): сначала «весь день», потом по времени. */
 	@Transactional(readOnly = true)
-	public List<TimeOffView> on(LocalDate date) {
+	public List<TimeOffView> on(LocalDate date, long doctorId) {
 		return repository.findAll()
 			.stream()
-			.filter(t -> t.on(date))
+			.filter(t -> t.on(date, doctorId))
 			.map(TimeOffView::of)
 			.sorted((a, b) -> a.wholeDay() != b.wholeDay() ? (a.wholeDay() ? -1 : 1)
 					: a.wholeDay() ? 0 : a.startTime().compareTo(b.startTime()))
@@ -45,11 +45,12 @@ public class TimeOffService {
 	}
 
 	/**
+	 * @param doctorId чей перерыв; null — у всех врачей
 	 * @param weekday каждую неделю; иначе — firstDay и lastDay (один день: lastDay = firstDay)
 	 * @param startTime вместе с endTime; оба null — весь день
 	 */
 	@Transactional
-	public TimeOffView create(DayOfWeek weekday, LocalDate firstDay, LocalDate lastDay, LocalTime startTime,
+	public TimeOffView create(Long doctorId, DayOfWeek weekday, LocalDate firstDay, LocalDate lastDay, LocalTime startTime,
 			LocalTime endTime, String title, String emoji) {
 		if (weekday == null) {
 			if (firstDay == null) {
@@ -81,7 +82,7 @@ public class TimeOffService {
 		if (cleanEmoji.length() > 8) {
 			throw new InvalidFieldException("emoji", "Один значок");
 		}
-		return TimeOffView.of(repository.save(new TimeOff(weekday, firstDay, lastDay, startTime, endTime, cleanTitle,
+		return TimeOffView.of(repository.save(new TimeOff(doctorId, weekday, firstDay, lastDay, startTime, endTime, cleanTitle,
 				cleanEmoji, clock.instant())));
 	}
 

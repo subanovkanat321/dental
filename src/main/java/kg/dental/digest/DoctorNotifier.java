@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import kg.dental.AssetVersion;
+import kg.dental.doctor.DoctorService;
+import kg.dental.doctor.Staff;
 import kg.dental.telegram.TelegramClient;
 import kg.dental.telegram.TelegramException;
 import kg.dental.telegram.TelegramProperties;
@@ -13,9 +15,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Отправить уведомление всем из ALLOWED_TELEGRAM_IDS. Текст — только числа и время, без имён
- * и телефонов; имена видны в Mini App по кнопке. Не доставлено одному (например, не нажимал
- * /start) — остальным всё равно уходит.
+ * Уведомления врачам. Текст — только числа и время, без имён пациентов и телефонов; имена
+ * видны в Mini App по кнопке. Не доставлено одному (например, не нажимал /start) — остальным
+ * всё равно уходит.
  */
 @Component
 public class DoctorNotifier {
@@ -32,10 +34,17 @@ public class DoctorNotifier {
 
 	private final AssetVersion version;
 
-	DoctorNotifier(TelegramClient telegram, TelegramProperties properties, AssetVersion version) {
+	private final Staff staff;
+
+	private final DoctorService doctors;
+
+	DoctorNotifier(TelegramClient telegram, TelegramProperties properties, AssetVersion version, Staff staff,
+			DoctorService doctors) {
 		this.telegram = telegram;
 		this.properties = properties;
 		this.version = version;
+		this.staff = staff;
+		this.doctors = doctors;
 	}
 
 	/** Бот включён и настроен — расписанию есть смысл работать. */
@@ -43,19 +52,29 @@ public class DoctorNotifier {
 		return properties.mode() != Mode.OFF && properties.configured();
 	}
 
-	public void send(String kind, String text, List<Link> links) {
-		var buttons = buttons(links);
+	/**
+	 * Уведомление о приёмах врача — ему самому. Telegram врача не привязан — админам
+	 * (ALLOWED_TELEGRAM_IDS), и если врачей несколько, первой строкой — чьё это. Кнопки
+	 * открывают «День» этого врача ({@code doctor=ID} в адресе).
+	 */
+	public void send(long doctorId, String kind, String text, List<Link> links) {
+		var own = doctors.telegramOf(doctorId).isPresent();
+		var recipients = staff.recipientsFor(doctorId);
+		var body = !own && doctors.active().size() > 1 ? "🧑‍⚕️ " + doctors.nameOf(doctorId) + "\n" + text : text;
+		var buttons = buttons(links.stream()
+			.map(l -> new Link(l.text(), l.query() == null ? "doctor=" + doctorId : l.query() + "&doctor=" + doctorId))
+			.toList());
 		var sent = 0;
-		for (var chatId : properties.allowedIds()) {
+		for (var chatId : recipients) {
 			try {
-				telegram.sendMessage(chatId, text, buttons);
+				telegram.sendMessage(chatId, body, buttons);
 				sent++;
 			}
 			catch (TelegramException e) {
 				log.warn("{}: не доставлено: {}", kind, e.getMessage());
 			}
 		}
-		log.info("{}: отправлено {} из {}", kind, sent, properties.allowedIds().size());
+		log.info("{}: отправлено {} из {}", kind, sent, recipients.size());
 	}
 
 	/** Пациенту — ответ о его заявке (самозапись). Не доставлено — только в лог. */

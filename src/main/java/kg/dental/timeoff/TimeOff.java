@@ -37,6 +37,9 @@ class TimeOff {
 	@Column(nullable = false)
 	private String emoji;
 
+	/** Чей перерыв (V11); null — у всех врачей (джума-намаз, выходной кабинета). */
+	private Long doctorId;
+
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -44,8 +47,9 @@ class TimeOff {
 		// для JPA
 	}
 
-	TimeOff(DayOfWeek weekday, LocalDate firstDay, LocalDate lastDay, LocalTime startTime, LocalTime endTime,
-			String title, String emoji, Instant createdAt) {
+	TimeOff(Long doctorId, DayOfWeek weekday, LocalDate firstDay, LocalDate lastDay, LocalTime startTime,
+			LocalTime endTime, String title, String emoji, Instant createdAt) {
+		this.doctorId = doctorId;
 		this.weekday = weekday == null ? null : (short) weekday.getValue();
 		this.firstDay = firstDay;
 		this.lastDay = lastDay;
@@ -56,10 +60,17 @@ class TimeOff {
 		this.createdAt = createdAt;
 	}
 
-	/** Действует ли в этот день. */
-	boolean on(LocalDate date) {
+	/** Действует ли в этот день у этого врача. */
+	boolean on(LocalDate date, long doctor) {
+		if (doctorId != null && doctorId != doctor) {
+			return false;
+		}
 		return weekday != null ? date.getDayOfWeek().getValue() == weekday
 				: !date.isBefore(firstDay) && !date.isAfter(lastDay);
+	}
+
+	Long getDoctorId() {
+		return doctorId;
 	}
 
 	Long getId() {

@@ -17,7 +17,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 @IntegrationTest
 class InitDataAuthFilterTests {
 
-	static final String DAY = "/api/appointments?date=2099-06-01";
+	static final String DAY = "/api/appointments?doctorId=1&date=2099-06-01";
 
 	@Autowired
 	MockMvcTester mvc;

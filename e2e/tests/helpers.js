@@ -38,6 +38,11 @@ export function signInitData(userId = DOCTOR, authDate = Math.floor(Date.now() /
 
 export async function resetDb() {
   await db.query('truncate waitlist_entry, appointment, patient, telegram_contact restart identity cascade');
+  // Врачи — как после миграции V11: один врач №1 без Telegram
+  await db.query('delete from time_off where doctor_id is not null');
+  await db.query('delete from doctor where id <> 1');
+  await db.query(`update doctor set full_name = 'Врач', about = null, telegram_id = null, photo = null,
+    photo_type = null, photo_version = 0, active = true where id = 1`);
   // Перерывы — как после миграции V7: только пятничный джума-намаз
   await db.query('delete from time_off');
   await db.query(`insert into time_off (weekday, start_time, end_time, title, emoji)
@@ -58,11 +63,11 @@ export async function addPatient(fullName, phone = `99655${String(Math.floor(Mat
 }
 
 /** Приём на дату и время по Бишкеку. */
-export async function addAppointment(patientId, date, time, { status = 'SCHEDULED', minutes = 30, reply = 'NONE', reminded = false } = {}) {
+export async function addAppointment(patientId, date, time, { status = 'SCHEDULED', minutes = 30, reply = 'NONE', reminded = false, doctor = 1 } = {}) {
   const start = new Date(`${date}T${time}:00+06:00`);
   const end = new Date(start.getTime() + minutes * 60000);
-  const { rows } = await db.query(`insert into appointment (patient_id, start_at, end_at, status, reply, reminder_opened_at)
-    values ($1, $2, $3, $4, $5, $6) returning id`, [patientId, start, end, status, reply, reminded ? new Date() : null]);
+  const { rows } = await db.query(`insert into appointment (doctor_id, patient_id, start_at, end_at, status, reply, reminder_opened_at)
+    values ($7, $1, $2, $3, $4, $5, $6) returning id`, [patientId, start, end, status, reply, reminded ? new Date() : null, doctor]);
   return rows[0].id;
 }
 
@@ -133,4 +138,11 @@ export function slot(page, time) {
 export async function saveContact(telegramId, phone, firstName = 'Пациент') {
   await db.query(`insert into telegram_contact (telegram_id, phone, first_name) values ($1, $2, $3)
     on conflict (telegram_id) do update set phone = excluded.phone`, [telegramId, phone, firstName]);
+}
+
+/** Второй врач (как из «Меню → Врачи»): id. */
+export async function addDoctor(fullName, telegramId = null, about = null) {
+  const { rows } = await db.query('insert into doctor (full_name, telegram_id, about) values ($1, $2, $3) returning id',
+    [fullName, telegramId, about]);
+  return Number(rows[0].id);
 }

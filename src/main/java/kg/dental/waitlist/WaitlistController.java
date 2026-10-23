@@ -24,12 +24,12 @@ class WaitlistController {
 
 	static final String DURATION_MESSAGE = "Длительность от 15 минут до 4 часов";
 
-	record Add(@NotNull(message = "Выберите пациента") Long patientId,
+	record Add(@NotNull(message = "Выберите пациента") Long patientId, Long doctorId,
 			@NotNull(message = DURATION_MESSAGE) @Min(value = 15, message = DURATION_MESSAGE)
 			@Max(value = 240, message = DURATION_MESSAGE) Integer durationMinutes) {
 	}
 
-	record Book(@NotNull(message = "Выберите время") Instant startAt) {
+	record Book(@NotNull(message = "Выберите врача") Long doctorId, @NotNull(message = "Выберите время") Instant startAt) {
 	}
 
 	private final WaitlistService service;
@@ -46,7 +46,7 @@ class WaitlistController {
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	WaitlistView add(@Valid @RequestBody Add request) {
-		return service.add(request.patientId(), request.durationMinutes());
+		return service.add(request.patientId(), request.doctorId(), request.durationMinutes());
 	}
 
 	@DeleteMapping("/{id}")
@@ -58,7 +58,7 @@ class WaitlistController {
 	/** Записать (или перенести, если уже записан) в освободившееся окно и убрать из листа. */
 	@PostMapping("/{id}/book")
 	AppointmentView book(@PathVariable long id, @Valid @RequestBody Book request) {
-		return service.book(id, request.startAt());
+		return service.book(id, request.doctorId(), request.startAt());
 	}
 
 }

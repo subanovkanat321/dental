@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import kg.dental.AssetVersion;
 import kg.dental.BookingProperties;
+import kg.dental.doctor.Staff;
 import kg.dental.patient.PatientService;
 import kg.dental.telegram.TelegramApi.CallbackQuery;
 import kg.dental.telegram.TelegramApi.Update;
@@ -34,8 +35,11 @@ class BotUpdateHandler {
 
 	private final List<BotCallbacks> callbacks;
 
+	private final Staff staff;
+
 	BotUpdateHandler(TelegramClient telegram, TelegramProperties properties, AssetVersion version,
-			BookingProperties booking, PatientService patients, List<BotCallbacks> callbacks) {
+			BookingProperties booking, PatientService patients, List<BotCallbacks> callbacks, Staff staff) {
+		this.staff = staff;
 		this.telegram = telegram;
 		this.properties = properties;
 		this.version = version;
@@ -52,7 +56,7 @@ class BotUpdateHandler {
 		if (!miniAppAvailable()) {
 			return;
 		}
-		for (var chatId : properties.allowedIds()) {
+		for (var chatId : staff.allTelegramIds()) {
 			try {
 				setMenuButton(chatId);
 			}
@@ -85,7 +89,7 @@ class BotUpdateHandler {
 			return;
 		}
 		var start = message.text() != null && message.text().strip().startsWith("/start");
-		if (!properties.isAllowed(message.from().id())) {
+		if (!staff.isStaff(message.from().id())) {
 			if (start) {
 				greetPatient(chatId);
 			}

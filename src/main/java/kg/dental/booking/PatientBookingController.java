@@ -26,7 +26,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/patient")
 class PatientBookingController {
 
-	record Book(@NotNull(message = "Выберите услугу") Long serviceTypeId,
+	record Book(@NotNull(message = "Выберите врача") Long doctorId,
+			@NotNull(message = "Выберите услугу") Long serviceTypeId,
 			@NotNull(message = "Выберите время") Instant startAt, String fullName, boolean consent) {
 	}
 
@@ -43,16 +44,16 @@ class PatientBookingController {
 
 	@GetMapping("/slots")
 	BookingViews.Slots slots(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-			@RequestParam long serviceTypeId) {
-		return service.slots(date, serviceTypeId);
+			@RequestParam long doctorId, @RequestParam long serviceTypeId) {
+		return service.slots(date, doctorId, serviceTypeId);
 	}
 
 	@PostMapping("/booking")
 	@ResponseStatus(HttpStatus.CREATED)
 	BookingViews.Booking book(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long telegramId,
 			@Valid @RequestBody Book request) {
-		return service.book(telegramId, request.serviceTypeId(), request.startAt(), request.fullName(),
-				request.consent());
+		return service.book(telegramId, request.doctorId(), request.serviceTypeId(), request.startAt(),
+				request.fullName(), request.consent());
 	}
 
 	@PostMapping("/booking/cancel")

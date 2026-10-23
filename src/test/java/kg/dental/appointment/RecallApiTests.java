@@ -89,7 +89,7 @@ class RecallApiTests {
 
 	private void visit(long patient, int days, String status) {
 		var start = Instant.now().plus(Duration.ofDays(days)).plus(Duration.ofHours(hourShift++));
-		jdbc.update("insert into appointment (patient_id, start_at, end_at, status) values (?, ?, ?, ?)", patient,
+		jdbc.update("insert into appointment (doctor_id, patient_id, start_at, end_at, status) values (1, ?, ?, ?, ?)", patient,
 				Timestamp.from(start), Timestamp.from(start.plusSeconds(1800)), status);
 	}
 

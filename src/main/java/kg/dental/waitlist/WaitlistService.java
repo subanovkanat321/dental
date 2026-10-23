@@ -41,20 +41,20 @@ public class WaitlistService {
 		var all = entries.findAllWithPatients();
 		var upcoming = appointments.upcoming(all.stream().map(e -> e.getPatient().getId()).toList());
 		return all.stream()
-			.map(e -> new WaitlistView(e.getId(), PatientView.of(e.getPatient()), e.getDurationMinutes(),
+			.map(e -> new WaitlistView(e.getId(), e.getDoctorId(), PatientView.of(e.getPatient()), e.getDurationMinutes(),
 					e.getCreatedAt(), upcoming.get(e.getPatient().getId())))
 			.toList();
 	}
 
 	@Transactional
-	public WaitlistView add(long patientId, int durationMinutes) {
+	public WaitlistView add(long patientId, Long doctorId, int durationMinutes) {
 		var patient = patients.require(patientId);
 		if (entries.existsByPatientId(patientId)) {
 			throw new ConflictException(ConflictException.ALREADY_WAITING, "Пациент уже в листе ожидания");
 		}
-		var entry = entries.saveAndFlush(new WaitlistEntry(patient, durationMinutes, clock.instant()));
+		var entry = entries.saveAndFlush(new WaitlistEntry(patient, doctorId, durationMinutes, clock.instant()));
 		var upcoming = appointments.upcoming(List.of(patientId)).get(patientId);
-		return new WaitlistView(entry.getId(), PatientView.of(patient), durationMinutes, entry.getCreatedAt(), upcoming);
+		return new WaitlistView(entry.getId(), doctorId, PatientView.of(patient), durationMinutes, entry.getCreatedAt(), upcoming);
 	}
 
 	@Transactional
@@ -64,15 +64,18 @@ public class WaitlistService {
 
 	/**
 	 * Записать в освободившееся окно и убрать из листа — одной транзакцией: время занято
-	 * (409) — пациент остаётся в листе. Уже записан — приём переносится, а не дублируется.
+	 * (409) — пациент остаётся в листе. Уже записан к этому врачу — приём переносится, а не
+	 * дублируется; к другому — новая запись (врача у приёма не меняем).
+	 *
+	 * @param doctorId чьё окно освободилось
 	 */
 	@Transactional
-	public AppointmentView book(long id, Instant startAt) {
+	public AppointmentView book(long id, long doctorId, Instant startAt) {
 		var entry = require(id);
 		var patientId = entry.getPatient().getId();
 		var upcoming = appointments.upcoming(List.of(patientId)).get(patientId);
-		var booked = upcoming == null
-				? appointments.create(new AppointmentRequests.Create(patientId, startAt, entry.getDurationMinutes()))
+		var booked = upcoming == null || upcoming.doctorId() != doctorId
+				? appointments.create(new AppointmentRequests.Create(doctorId, patientId, startAt, entry.getDurationMinutes()))
 				: appointments.reschedule(upcoming.id(),
 						new AppointmentRequests.Reschedule(upcoming.version(), startAt, entry.getDurationMinutes()));
 		entries.delete(entry);

@@ -7,14 +7,15 @@ import java.time.LocalTime;
 /**
  * Перерыв или выходной в ответах API.
  *
+ * @param doctorId чей перерыв; null — у всех врачей
  * @param weekday каждую неделю в этот день; null — разово, с firstDay по lastDay
  * @param startTime null вместе с endTime — весь день
  */
-public record TimeOffView(long id, DayOfWeek weekday, LocalDate firstDay, LocalDate lastDay, LocalTime startTime,
+public record TimeOffView(long id, Long doctorId, DayOfWeek weekday, LocalDate firstDay, LocalDate lastDay, LocalTime startTime,
 		LocalTime endTime, String title, String emoji) {
 
 	static TimeOffView of(TimeOff t) {
-		return new TimeOffView(t.getId(), t.getWeekday(), t.getFirstDay(), t.getLastDay(), t.getStartTime(),
+		return new TimeOffView(t.getId(), t.getDoctorId(), t.getWeekday(), t.getFirstDay(), t.getLastDay(), t.getStartTime(),
 				t.getEndTime(), t.getTitle(), t.getEmoji());
 	}
 

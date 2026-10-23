@@ -157,7 +157,7 @@ class ReviewsTests {
 		var start = LocalDate.of(2099, 6, 2).minusDays(daysAgo).atTime(10, 0).atZone(BISHKEK).toInstant()
 			.plusSeconds(60L * 30 * jdbc.queryForObject("select count(*) from appointment", Integer.class));
 		return jdbc.queryForObject("""
-				insert into appointment (patient_id, start_at, end_at, status) values (?, ?, ?, ?) returning id""",
+				insert into appointment (doctor_id, patient_id, start_at, end_at, status) values (1, ?, ?, ?, ?) returning id""",
 				Long.class, patientId, Timestamp.from(start), Timestamp.from(start.plusSeconds(1800)), status);
 	}
 

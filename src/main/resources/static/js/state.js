@@ -180,8 +180,12 @@ export function nextToRemind(appointments, pressed = new Set(), now = new Date()
  * Кандидат ли пациент из листа ожидания в это окно: помещается по длительности и, если уже
  * записан, окно раньше его приёма — в лист ставят тех, кто хочет прийти раньше.
  */
-export function fitsWindow(entry, window) {
-  const earlier = !entry.upcoming || new Date(window.startAt) < new Date(entry.upcoming.startAt);
+export function fitsWindow(entry, window, doctorId) {
+  // Хочет к другому врачу — не кандидат; к любому (null) или к этому — кандидат
+  if (doctorId !== undefined && entry.doctorId != null && entry.doctorId !== doctorId) return false;
+  // Записан к другому врачу — в это окно будет новая запись, «раньше» не важно
+  const sameDoctor = doctorId === undefined || !entry.upcoming || entry.upcoming.doctorId === doctorId;
+  const earlier = !entry.upcoming || !sameDoctor || new Date(window.startAt) < new Date(entry.upcoming.startAt);
   return earlier && entry.durationMinutes <= minutesBetween(window.startAt, window.endAt);
 }
 
@@ -319,4 +323,9 @@ export function ratingsPhrase(n) {
   const word = mod10 === 1 && mod100 !== 11 ? 'оценка'
     : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? 'оценки' : 'оценок';
   return `${n} ${word}`;
+}
+
+/** Две буквы для кружка врача без фото: «Айгерим Садыкова» → «АС». */
+export function initials(name) {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('');
 }

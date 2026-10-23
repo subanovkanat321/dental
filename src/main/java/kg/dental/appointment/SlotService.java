@@ -39,15 +39,16 @@ public class SlotService {
 	}
 
 	/**
+	 * @param doctorId чьё расписание: у каждого врача своё кресло
 	 * @param duration длина приёма для сетки начал; null — только окна
 	 * @param excludeId приём, который переносят: его старое время считается свободным
 	 */
 	@Transactional(readOnly = true)
-	public SlotsView slots(LocalDate date, Duration duration, Long excludeId) {
+	public SlotsView slots(LocalDate date, long doctorId, Duration duration, Long excludeId) {
 		if (!schedule.isWorkingDay(date)) {
 			return new SlotsView(false, schedule.start(), schedule.end(), List.of(), List.of(), List.of(), null);
 		}
-		var offs = timeOff.on(date);
+		var offs = timeOff.on(date, doctorId);
 		var wholeDay = offs.stream().filter(t -> t.wholeDay()).findFirst();
 		if (wholeDay.isPresent()) {
 			var off = new SlotsView.Break(null, null, wholeDay.get().title(), wholeDay.get().emoji());
@@ -65,7 +66,7 @@ public class SlotService {
 				breaks.add(new SlotsView.Break(start, end, t.title(), t.emoji()));
 			}
 		}
-		var busy = new ArrayList<>(appointments.findBusy(from, to, excludeId == null ? -1 : excludeId));
+		var busy = new ArrayList<>(appointments.findBusy(doctorId, from, to, excludeId == null ? -1 : excludeId));
 		breaks.forEach(b -> busy.add(new TimeRange(b.start(), b.end())));
 		var free = FreeTime.free(from, to, busy, clock.instant());
 		var starts = duration == null ? List.<Instant>of() : FreeTime.starts(free, duration);

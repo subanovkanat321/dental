@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import kg.dental.shared.ConflictException;
+import kg.dental.shared.ForbiddenException;
 import kg.dental.shared.InvalidFieldException;
 import kg.dental.shared.NotFoundException;
 import org.springframework.http.HttpHeaders;
@@ -58,6 +59,12 @@ class ApiErrors extends ResponseEntityExceptionHandler {
 		problem.setProperty("code", ex.code());
 		ex.properties().forEach(problem::setProperty);
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+	}
+
+	@ExceptionHandler
+	ResponseEntity<ProblemDetail> forbidden(ForbiddenException ex) {
+		return ResponseEntity.status(HttpStatus.FORBIDDEN)
+			.body(ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage()));
 	}
 
 	@ExceptionHandler

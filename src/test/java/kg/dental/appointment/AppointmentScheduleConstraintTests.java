@@ -105,8 +105,8 @@ class AppointmentScheduleConstraintTests {
 	/** Приём на 1 июня 2027 (UTC), время "HH:mm". */
 	private long insert(String start, String end, String status) {
 		return jdbc.queryForObject("""
-				insert into appointment (patient_id, start_at, end_at, status)
-				values (?, ?, ?, ?) returning id""", Long.class,
+				insert into appointment (doctor_id, patient_id, start_at, end_at, status)
+				values (1, ?, ?, ?, ?) returning id""", Long.class,
 				patientId, at(start), at(end), status);
 	}
 

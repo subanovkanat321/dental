@@ -4,7 +4,7 @@ import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
   reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
-  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase, timeOffWhen, priceText, ratingsPhrase,
+  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase, timeOffWhen, priceText, ratingsPhrase, initials,
 } from './state.js';
 import { startPatient } from './patient.js';
 
@@ -14,6 +14,28 @@ const SESSION_EXPIRED = 'Сессия устарела — откройте за
 
 let initData = tg?.initData || '';
 let settings = { clinicSignature: '' };
+
+/**
+ * Врачи кабинета — для сотрудника: кто я (mine), чей «День» сейчас открыт (current).
+ * У каждого врача своё кресло; переключатель в шапке «Дня» — посмотреть коллегу.
+ */
+const team = { doctors: [], admin: false, mine: null, current: null };
+
+function doctorById(id) {
+  return team.doctors.find((d) => d.id === id);
+}
+
+/** Кружок врача: фото или инициалы. */
+function avatar(d, size = 28) {
+  return d?.photoUrl
+    ? h('img', { class: 'avatar', src: d.photoUrl, alt: '', width: size, height: size })
+    : h('span', { class: 'avatar', 'aria-hidden': 'true', style: `width:${size}px;height:${size}px` }, initials(d?.fullName || '?'));
+}
+
+/** «Айгерим Садыкова» → «Айгерим»: переключатель узкий. */
+function shortName(name) {
+  return name.trim().split(/\s+/)[0];
+}
 
 // ---------- DOM ----------
 
@@ -60,7 +82,9 @@ const ICONS = {
   'Статистика неявок': '📊',
   'Услуги для самозаписи': '🦷',
   'Перерывы и выходные': '☕',
-  'Профиль врача': '🧑‍⚕️',
+  'Мой профиль': '🧑‍⚕️',
+  'Врачи': '👩‍⚕️',
+  'Фото и профиль': '📷',
   'Записать снова': '➕',
   'Записать на следующий визит': '➕',
   'Изменить имя или телефон': '✏️',
@@ -330,6 +354,7 @@ function callButton(phone) {
 
 async function dayScreen(date, flashId) {
   const id = ++screenId;
+  const doctorId = team.current;
   hideToast();
   backButton.hide();
   mainButton.set('Новая запись', () => newScreen({ date }));
@@ -348,7 +373,14 @@ async function dayScreen(date, flashId) {
   }, h('span', { class: 'wd' }, d.today ? 'Сегодня' : d.weekday), h('span', { class: 'dn' }, String(d.day)),
   h('span', { class: 'badge', 'aria-hidden': 'true' })));
   const strip = h('div', { class: 'strip', role: 'group', 'aria-label': 'Дни' }, chips);
+  // Врачи кабинета: у каждого своё кресло — переключиться на коллегу
+  const doctorSwitch = team.doctors.length > 1 ? h('div', { class: 'doctor-switch', role: 'group', 'aria-label': 'Врач' },
+    team.doctors.map((d) => h('button', {
+      type: 'button', 'aria-pressed': String(d.id === doctorId),
+      onclick: () => { team.current = d.id; dayScreen(date); },
+    }, avatar(d, 24), h('span', {}, d.id === team.mine ? `${shortName(d.fullName)} (я)` : shortName(d.fullName))))) : null;
   const head = h('header', { class: 'day-head' },
+    doctorSwitch,
     h('div', { class: 'day-title' },
       h('button', { type: 'button', class: 'arrow', 'aria-label': 'Предыдущий день', onclick: () => dayScreen(addDays(date, -1)) }, '‹'),
       h('label', {}, h('h1', {}, dayTitle(date)), dateInput),
@@ -366,7 +398,7 @@ async function dayScreen(date, flashId) {
   render(head, ...Array.from({ length: 6 }, () => h('div', { class: 'skeleton' })));
   chips[days.findIndex((d) => d.date === date)]?.scrollIntoView({ inline: 'center', block: 'nearest' });
   // Числа в ленте — отдельным запросом: не нужны, чтобы показать день, и не держат его
-  api('GET', `/api/appointments/counts?from=${days[0].date}&days=${days.length}`).then((counts) => {
+  api('GET', `/api/appointments/counts?from=${days[0].date}&days=${days.length}&doctorId=${doctorId}`).then((counts) => {
     if (id !== screenId) return;
     counts.forEach((c, i) => {
       if (!chips[i] || !c.booked) return;
@@ -383,8 +415,8 @@ async function dayScreen(date, flashId) {
   try {
     // Параллельно: приёмы дня, свободные окна (DD2) и лист ожидания — кого позвать в окно
     [appointments, slots, waitlist] = await Promise.all([
-      api('GET', `/api/appointments?date=${date}`),
-      api('GET', `/api/slots?date=${date}`),
+      api('GET', `/api/appointments?date=${date}&doctorId=${doctorId}`),
+      api('GET', `/api/slots?date=${date}&doctorId=${doctorId}`),
       api('GET', '/api/waitlist'),
     ]);
   } catch (error) {
@@ -413,7 +445,7 @@ async function dayScreen(date, flashId) {
     const next = date === todayIn(now)
       ? appointments.find((a) => a.status === 'SCHEDULED' && new Date(a.startAt) > now) : null;
     list.replaceChildren(...items.map((item) => (item.pause ? pauseRow(item) : item.free
-      ? freeRow(date, item, waitlist) : row(item, item === next, item.id === flash, now, draw))));
+      ? freeRow(date, item, waitlist, doctorId) : row(item, item === next, item.id === flash, now, draw))));
     flash = null;
 
     // Вечерний обход (DD6): на «Завтра» главная кнопка ведёт к следующему, кому не напомнили
@@ -455,8 +487,8 @@ function pauseRow(p) {
     h('span', { class: 'time hint' }, timeOf(p.endAt)));
 }
 
-function freeRow(date, slot, waitlist = []) {
-  const candidates = waitlist.filter((entry) => fitsWindow(entry, slot));
+function freeRow(date, slot, waitlist = [], doctorId = team.current) {
+  const candidates = waitlist.filter((entry) => fitsWindow(entry, slot, doctorId));
   const open = () => newScreen({ date, time: timeOf(slot.startAt), duration: windowDuration(slot), candidates });
   return h('li', {
     class: 'row free', role: 'listitem', tabindex: 0, onclick: open,
@@ -511,6 +543,8 @@ function cardScreen(a, notice) {
   // Ответ сервера после ухода с карточки не должен вернуть врача обратно на неё
   const refresh = () => id === screenId && cardScreen(a);
   mainButton.hide();
+  // «Назад» — в «День» врача этого приёма (из карточки пациента можно открыть приём коллеги)
+  if (doctorById(a.doctorId)) team.current = a.doctorId;
   backButton.set(() => dayScreen(dateOf(a.startAt)));
 
   const state = rowState(a);
@@ -583,7 +617,7 @@ function cardScreen(a, notice) {
     // Лечение часто в несколько визитов: сразу записать на следующий — через неделю, тот же пациент и длительность
     actions.push(button('Записать на следующий визит', () => newScreen({
       date: addDays(dateOf(a.startAt) > todayIn() ? dateOf(a.startAt) : todayIn(), 7),
-      duration: minutesBetween(a.startAt, a.endAt), patient: a.patient,
+      duration: minutesBetween(a.startAt, a.endAt), patient: a.patient, doctorId: a.doctorId,
     }), 'btn primary'));
     actions.push(h('div', { class: 'danger-zone' },
       button('Исправить: не пришёл', () => act('status', { status: 'NO_SHOW' }, undoable('Отмечено: не пришёл')), 'btn danger')));
@@ -595,6 +629,8 @@ function cardScreen(a, notice) {
     backButton.link(),
     h('h1', { class: 'time' }, `${timeOf(a.startAt)}–${timeOf(a.endAt)}`),
     h('div', { class: 'hint' }, dayTitle(dateOf(a.startAt))),
+    team.doctors.length > 1 ? h('div', { class: 'for-doctor' }, avatar(doctorById(a.doctorId)),
+      h('span', {}, doctorById(a.doctorId)?.fullName || 'Врач скрыт')) : null,
     h('p', {}, h('button', {
       type: 'button', class: 'link name-link', onclick: () => patientScreen(a.patient.id, () => cardScreen(a)),
     }, a.patient.fullName, ' ›'), h('br'), formatPhone(a.patient.phone)),
@@ -633,6 +669,7 @@ function rescheduleScreen(a) {
   // exclude: старое время переносимого приёма в сетке считается свободным (ER4)
   const form = timeFields({
     date: dateOf(a.startAt), time: timeOf(a.startAt), duration: minutesBetween(a.startAt, a.endAt), exclude: a.id,
+    doctorId: a.doctorId, // перенос — у того же врача
   });
   render(h('section', { class: 'screen' }, backButton.link(),
     h('h1', {}, 'Перенести'), h('div', {}, a.patient.fullName), form.node));
@@ -658,7 +695,7 @@ function rescheduleScreen(a) {
  * (/api/slots) тем же условием, что и защита базы от двойной записи. «Другое время» —
  * ручной ввод, в том числе вне рабочих часов.
  */
-function timeFields({ date, time = '', duration = 30, exclude }) {
+function timeFields({ date, time = '', duration = 30, exclude, doctorId = team.current }) {
   const errors = { startAt: h('div', { class: 'error', role: 'alert' }), durationMinutes: h('div', { class: 'error' }) };
   const dateInput = h('input', { type: 'date', value: date, required: true, onchange: () => { chosen = ''; loadGrid(); } });
   const timeInput = h('input', { type: 'time', step: 900 });
@@ -730,7 +767,7 @@ function timeFields({ date, time = '', duration = 30, exclude }) {
     const seq = ++gridSeq;
     if (!keepError) errors.startAt.textContent = '';
     grid.replaceChildren(h('div', { class: 'hint' }, 'Загрузка…'));
-    const query = `date=${dateInput.value}&duration=${fields.duration}${exclude ? `&exclude=${exclude}` : ''}`;
+    const query = `date=${dateInput.value}&doctorId=${doctorId}&duration=${fields.duration}${exclude ? `&exclude=${exclude}` : ''}`;
     let loaded;
     try {
       loaded = await api('GET', `/api/slots?${query}`);
@@ -783,7 +820,8 @@ function menuScreen(back) {
     h('button', { type: 'button', class: 'btn', onclick: () => statsScreen(self) }, 'Статистика неявок'),
     h('button', { type: 'button', class: 'btn', onclick: () => servicesScreen(self) }, 'Услуги для самозаписи'),
     h('button', { type: 'button', class: 'btn', onclick: () => timeOffScreen(self) }, 'Перерывы и выходные'),
-    h('button', { type: 'button', class: 'btn', onclick: () => profileScreen(self) }, 'Профиль врача')));
+    team.mine ? h('button', { type: 'button', class: 'btn', onclick: () => profileScreen(self) }, 'Мой профиль') : null,
+    team.admin ? h('button', { type: 'button', class: 'btn', onclick: () => doctorsScreen(self) }, 'Врачи') : null));
 }
 
 // ---------- Профиль врача ----------
@@ -810,25 +848,28 @@ function resizePhoto(file, max = 800) {
   });
 }
 
-/** Имя, пара слов о себе и фото — пациент видит их на экране записи вместо рисунка. */
-async function profileScreen(back) {
+/**
+ * Профиль врача: имя, пара слов о себе и фото — пациент видит их, когда выбирает врача.
+ * Врач правит свой профиль; админ — любого (из «Врачей»).
+ */
+async function profileScreen(back, doctorId = team.mine ?? team.current) {
   const id = ++screenId;
   backButton.set(back);
   mainButton.hide();
   let profile;
   try {
-    profile = await api('GET', '/api/profile');
+    profile = (await api('GET', '/api/doctors')).find((d) => d.id === doctorId);
   } catch (e) {
     if (id !== screenId || fatal(e)) return;
     render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e))));
     return;
   }
-  if (id !== screenId) return;
-  const self = () => profileScreen(back);
-  const name = h('input', { type: 'text', maxLength: 100, value: profile.doctorName || '', placeholder: 'Например: Айгерим Садыкова' });
+  if (id !== screenId || !profile) return;
+  const self = () => profileScreen(back, doctorId);
+  const name = h('input', { type: 'text', maxLength: 100, value: profile.fullName || '', placeholder: 'Например: Айгерим Садыкова' });
   const about = h('textarea', { maxLength: 300, rows: 3, placeholder: 'Например: стоматолог-терапевт, 10 лет опыта' });
   about.value = profile.about || '';
-  const errors = { doctorName: h('div', { class: 'error' }), about: h('div', { class: 'error' }), photo: h('div', { class: 'error' }) };
+  const errors = { fullName: h('div', { class: 'error' }), about: h('div', { class: 'error' }), photo: h('div', { class: 'error' }) };
   const error = h('div', { class: 'error', role: 'alert' });
   const file = h('input', { type: 'file', accept: 'image/*', class: 'sr-only', id: 'photo-file' });
   file.addEventListener('change', async () => {
@@ -838,16 +879,17 @@ async function profileScreen(back) {
     try {
       const form = new FormData();
       form.append('photo', await resizePhoto(picked), 'photo.jpg');
-      await api('POST', '/api/profile/photo', form);
+      await api('POST', `/api/doctors/${doctorId}/photo`, form);
       haptic('success');
+      await refreshTeam();
       self();
     } catch (e) {
       if (fatal(e)) return;
       errors.photo.textContent = e instanceof ApiError ? (e.fields.photo || errorText(e)) : 'Не получилось открыть фото — выберите другое';
     }
   });
-  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Профиль врача'),
-    h('p', { class: 'hint' }, 'Пациенты видят это на экране записи через бота.'),
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, doctorId === team.mine ? 'Мой профиль' : 'Профиль врача'),
+    h('p', { class: 'hint' }, 'Пациенты видят это, когда выбирают врача в боте.'),
     h('div', { class: 'profile-photo' },
       profile.photoUrl ? h('img', { src: profile.photoUrl, alt: 'Фото врача' })
         : h('div', { class: 'photo-empty', 'aria-hidden': 'true' }, '🧑‍⚕️'),
@@ -858,7 +900,8 @@ async function profileScreen(back) {
           type: 'button', class: 'link danger-link',
           onclick: async () => {
             try {
-              await api('DELETE', '/api/profile/photo');
+              await api('DELETE', `/api/doctors/${doctorId}/photo`);
+              await refreshTeam();
               self();
             } catch (e) {
               if (!fatal(e)) errors.photo.textContent = errorText(e);
@@ -866,7 +909,7 @@ async function profileScreen(back) {
           },
         }, 'Удалить фото') : null)),
     errors.photo,
-    h('label', { class: 'field' }, h('span', {}, 'Имя врача'), name, errors.doctorName),
+    h('label', { class: 'field' }, h('span', {}, 'Имя врача'), name, errors.fullName),
     h('label', { class: 'field' }, h('span', {}, 'О себе'), about, errors.about),
     error));
   mainButton.set('Сохранить', async () => {
@@ -874,17 +917,98 @@ async function profileScreen(back) {
     error.textContent = '';
     mainButton.busy(true);
     try {
-      await api('PUT', '/api/profile', { doctorName: name.value, about: about.value });
+      await api('PUT', `/api/doctors/${doctorId}/profile`, { fullName: name.value, about: about.value });
       haptic('success');
+      await refreshTeam();
       toast('Сохранено');
       back();
     } catch (e) {
       mainButton.busy(false);
       if (fatal(e)) return;
       const f = e instanceof ApiError ? e.fields : {};
-      errors.doctorName.textContent = f.doctorName || '';
+      errors.fullName.textContent = f.fullName || '';
       errors.about.textContent = f.about || '';
-      if (!f.doctorName && !f.about) error.textContent = errorText(e);
+      if (!f.fullName && !f.about) error.textContent = errorText(e);
+    }
+  });
+}
+
+/** Список врачей после правки: имена и фото в переключателе «Дня» — свежие. */
+async function refreshTeam() {
+  try {
+    team.doctors = (await api('GET', '/api/doctors')).filter((d) => d.active);
+  } catch {
+    // старый список тоже годится
+  }
+}
+
+// ---------- Врачи (админ) ----------
+
+/** Врачи кабинета: завести, привязать Telegram, скрыть. Только админ (ALLOWED_TELEGRAM_IDS). */
+async function doctorsScreen(back) {
+  const id = ++screenId;
+  mainButton.hide();
+  backButton.set(back);
+  let list;
+  try {
+    list = await api('GET', '/api/doctors/admin');
+  } catch (e) {
+    if (id !== screenId || fatal(e)) return;
+    render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e))));
+    return;
+  }
+  if (id !== screenId) return;
+  const self = () => doctorsScreen(back);
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Врачи'),
+    h('p', { class: 'hint' }, 'У каждого врача своё расписание. Врач с привязанным Telegram входит в приложение и получает уведомления о своих приёмах.'),
+    list.map((d) => h('button', {
+      type: 'button', class: `doctor-row${d.active ? '' : ' inactive'}`, onclick: () => doctorEditScreen(d, self),
+    }, avatar(d, 44), h('span', { class: 'doctor-row-text' }, h('strong', {}, d.fullName),
+      h('span', { class: 'hint' }, [d.telegramId ? `Telegram ${d.telegramId}` : 'Telegram не привязан — уведомления вам',
+        d.active ? null : 'скрыт'].filter(Boolean).join(' · '))))),
+    h('button', { type: 'button', class: 'btn primary', onclick: () => doctorEditScreen(null, self) }, '+ Добавить врача')));
+}
+
+function doctorEditScreen(doctor, back) {
+  ++screenId;
+  backButton.set(back);
+  const name = h('input', { type: 'text', maxLength: 100, value: doctor?.fullName || '', placeholder: 'Например: Айгерим Садыкова' });
+  const about = h('input', { type: 'text', maxLength: 300, value: doctor?.about || '', placeholder: 'Например: ортодонт, брекеты' });
+  const telegram = h('input', { type: 'text', inputMode: 'numeric', value: doctor?.telegramId ?? '', placeholder: 'Например: 512345678' });
+  const active = h('input', { type: 'checkbox', checked: doctor ? doctor.active : true, id: 'doctor-active' });
+  const errors = { fullName: h('div', { class: 'error' }), about: h('div', { class: 'error' }), telegramId: h('div', { class: 'error' }) };
+  const error = h('div', { class: 'error', role: 'alert' });
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, doctor ? 'Врач' : 'Новый врач'),
+    h('label', { class: 'field' }, h('span', {}, 'Имя'), name, errors.fullName),
+    h('label', { class: 'field' }, h('span', {}, 'Кратко (видят пациенты)'), about, errors.about),
+    h('label', { class: 'field' }, h('span', {}, 'Telegram id врача'), telegram, errors.telegramId),
+    h('p', { class: 'hint' }, 'Свой id врач узнает у бота @userinfobot. Потом пусть нажмёт /start в нашем боте — появится кнопка «Открыть день».'),
+    doctor ? h('label', { class: 'consent', for: 'doctor-active' }, active, ' Работает (показывать пациентам)') : null,
+    doctor ? h('button', { type: 'button', class: 'btn', onclick: () => profileScreen(() => doctorEditScreen(doctor, back), doctor.id) }, 'Фото и профиль') : null,
+    error));
+  mainButton.set('Сохранить', async () => {
+    Object.values(errors).forEach((e) => { e.textContent = ''; });
+    error.textContent = '';
+    const tgId = telegram.value.trim();
+    if (tgId && !/^\d{3,15}$/.test(tgId)) {
+      errors.telegramId.textContent = 'Только цифры, как пишет @userinfobot';
+      return;
+    }
+    mainButton.busy(true);
+    const body = { fullName: name.value, about: about.value, telegramId: tgId ? Number(tgId) : null, active: active.checked };
+    try {
+      await api(doctor ? 'PUT' : 'POST', doctor ? `/api/doctors/${doctor.id}` : '/api/doctors', body);
+      haptic('success');
+      await refreshTeam();
+      if (!team.current && team.doctors.length) team.current = team.doctors[0].id;
+      back();
+    } catch (e) {
+      mainButton.busy(false);
+      if (fatal(e)) return;
+      const f = e instanceof ApiError ? e.fields : {};
+      Object.entries(errors).forEach(([k, el]) => { el.textContent = f[k] || ''; });
+      if (e.code === 'telegram-taken') errors.telegramId.textContent = e.message;
+      else if (!Object.keys(errors).some((k) => f[k])) error.textContent = errorText(e);
     }
   });
 }
@@ -912,7 +1036,8 @@ async function timeOffScreen(back) {
     error,
     list.length ? list.map((t) => h('div', { class: 'timeoff' },
       h('span', { class: 'timeoff-emoji', 'aria-hidden': 'true' }, t.emoji),
-      h('div', { class: 'timeoff-text' }, h('div', { class: 'timeoff-title' }, t.title), h('div', { class: 'hint' }, timeOffWhen(t))),
+      h('div', { class: 'timeoff-text' }, h('div', { class: 'timeoff-title' }, t.title), h('div', { class: 'hint' }, timeOffWhen(t)),
+        team.doctors.length > 1 ? h('div', { class: 'hint' }, t.doctorId ? `🧑‍⚕️ ${doctorById(t.doctorId)?.fullName || 'врач скрыт'}` : '👥 Все врачи') : null),
       h('button', {
         type: 'button', class: 'link danger-link', 'aria-label': `Удалить: ${t.title}`,
         onclick: async () => {
@@ -938,6 +1063,9 @@ function timeOffEditScreen(back) {
   backButton.set(back);
   let weekly = true;
   let weekday = 'FRIDAY';
+  // Для кого: по умолчанию — для своего кресла; null — у всех (общий выходной, джума-намаз)
+  let forDoctor = team.doctors.length > 1 ? (team.mine ?? team.current) : null;
+  const whoBox = h('div', { class: 'weekdays', role: 'group', 'aria-label': 'Для кого' });
   let emoji = TIME_OFF_EMOJI[0];
   const title = h('input', { type: 'text', maxLength: 60, placeholder: 'Например: Обед' });
   const firstDay = h('input', { type: 'date', value: todayIn() });
@@ -954,6 +1082,10 @@ function timeOffEditScreen(back) {
   const emojiBox = h('div', { class: 'emoji-pick', role: 'group', 'aria-label': 'Значок' });
 
   function draw() {
+    whoBox.replaceChildren(...[[null, '👥 Все врачи'], ...team.doctors.map((d) => [d.id, shortName(d.fullName)])]
+      .map(([value, label]) => h('button', {
+        type: 'button', class: 'day', 'aria-pressed': String(forDoctor === value), onclick: () => { forDoctor = value; draw(); },
+      }, label)));
     kindBox.replaceChildren(
       h('button', { type: 'button', 'aria-pressed': String(weekly), onclick: () => { weekly = true; draw(); } }, 'Каждую неделю'),
       h('button', { type: 'button', 'aria-pressed': String(!weekly), onclick: () => { weekly = false; draw(); } }, 'По датам'));
@@ -972,6 +1104,7 @@ function timeOffEditScreen(back) {
   firstDay.addEventListener('change', () => { if (lastDay.value < firstDay.value) lastDay.value = firstDay.value; });
 
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Новый перерыв'),
+    team.doctors.length > 1 ? h('div', { class: 'field' }, h('span', {}, 'Для кого'), whoBox) : null,
     kindBox, whenBox,
     h('label', { class: 'consent', for: 'whole-day' }, wholeDay, ' Весь день (выходной, отпуск)'),
     timeBox,
@@ -984,6 +1117,7 @@ function timeOffEditScreen(back) {
     error.textContent = '';
     mainButton.busy(true);
     const body = {
+      doctorId: forDoctor,
       weekday: weekly ? weekday : null,
       firstDay: weekly ? null : firstDay.value || null,
       lastDay: weekly ? null : lastDay.value || null,
@@ -1148,7 +1282,8 @@ async function statsScreen(back) {
   let weeks;
   let ratings;
   try {
-    [weeks, ratings] = await Promise.all([api('GET', '/api/appointments/stats?weeks=8'), api('GET', '/api/appointments/ratings?days=90')]);
+    [weeks, ratings] = await Promise.all([api('GET', `/api/appointments/stats?weeks=8&doctorId=${team.current}`),
+      api('GET', `/api/appointments/ratings?days=90&doctorId=${team.current}`)]);
   } catch (e) {
     if (id !== screenId || fatal(e)) return;
     render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e),
@@ -1257,7 +1392,8 @@ async function patientScreen(patientId, back) {
       onclick: () => cardScreen(a), onkeydown: (e) => e.key === 'Enter' && cardScreen(a),
     },
     h('span', { class: 'time' }, timeOf(a.startAt)),
-    h('span', { class: 'name' }, dayTitle(dateOf(a.startAt), now)),
+    h('span', { class: 'name' }, dayTitle(dateOf(a.startAt), now),
+      team.doctors.length > 1 && doctorById(a.doctorId) ? h('span', { class: 'hint' }, ` · ${shortName(doctorById(a.doctorId).fullName)}`) : null),
     h('span', { class: 'time hint' }, timeOf(a.endAt)),
     h('span', { class: `status tone-${state.tone}` }, `${state.icon} ${state.label}`));
   };
@@ -1305,7 +1441,7 @@ function waitlistButton(entry, p, card, refresh) {
     type: 'button', class: 'btn',
     onclick: async () => {
       try {
-        await api('POST', '/api/waitlist', { patientId: p.id, durationMinutes: duration });
+        await api('POST', '/api/waitlist', { patientId: p.id, doctorId: team.current, durationMinutes: duration });
         haptic('success');
         refresh();
       } catch (e) {
@@ -1359,7 +1495,7 @@ function editPatientScreen(p, back) {
 
 // ---------- Новая запись ----------
 
-function newScreen({ date, time, duration, patient, candidates = [] }) {
+function newScreen({ date, time, duration, patient, candidates = [], doctorId = team.current }) {
   const id = ++screenId;
   hideToast();
   backButton.set(() => dayScreen(date));
@@ -1376,7 +1512,7 @@ function newScreen({ date, time, duration, patient, candidates = [] }) {
   const phoneInput = h('input', { type: 'tel', autocomplete: 'off', placeholder: '0555 123 456' });
   const nameError = h('div', { class: 'error' });
   const phoneError = h('div', { class: 'error' });
-  const form = timeFields({ date, time, duration });
+  const form = timeFields({ date, time, duration, doctorId });
 
   function drawPatient() {
     patientError.replaceChildren();
@@ -1473,7 +1609,7 @@ function newScreen({ date, time, duration, patient, candidates = [] }) {
         drawPatient();
       }
       const created = await api('POST', '/api/appointments',
-        { patientId: picked.id, startAt: form.startAt(), durationMinutes: form.duration });
+        { doctorId, patientId: picked.id, startAt: form.startAt(), durationMinutes: form.duration });
       dayScreen(form.date(), created.id);
     } catch (e) {
       if (!fatal(e)) form.showError(e);
@@ -1506,7 +1642,7 @@ function newScreen({ date, time, duration, patient, candidates = [] }) {
           onclick: async () => {
             if (!form.validate()) return;
             try {
-              const booked = await api('POST', `/api/waitlist/${entry.id}/book`, { startAt: form.startAt() });
+              const booked = await api('POST', `/api/waitlist/${entry.id}/book`, { doctorId, startAt: form.startAt() });
               dayScreen(form.date(), booked.id);
             } catch (e) {
               if (!fatal(e)) form.showError(e);
@@ -1514,7 +1650,9 @@ function newScreen({ date, time, duration, patient, candidates = [] }) {
           },
         }, entry.upcoming ? 'Перенести сюда' : 'Записать сюда'))))) : null;
 
-  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Новая запись'),
+  const forDoctor = team.doctors.length > 1 ? h('div', { class: 'for-doctor' }, avatar(doctorById(doctorId)),
+    h('span', {}, 'к врачу ', h('strong', {}, doctorById(doctorId)?.fullName || ''))) : null;
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Новая запись'), forDoctor,
     waiting, patientBox, patientError, form.node));
   drawPatient();
   mainButton.set('Записать', submit);
@@ -1566,14 +1704,27 @@ async function start() {
     }, me);
     return;
   }
+  team.doctors = me.doctors;
+  team.admin = me.admin;
+  team.mine = me.doctorId;
+  if (!team.doctors.length) {
+    // Все врачи скрыты: админу — сразу «Врачи», иначе работать не с чем
+    doctorsScreen(() => location.reload());
+    return;
+  }
   // Подпись клиники для текста напоминания; без неё напоминание всё равно работает
   api('GET', '/api/settings').then((loaded) => { settings = loaded; }).catch(() => {});
   const params = new URLSearchParams(location.search);
+  // Свой «День» — по умолчанию; кнопка из уведомления о приёмах коллеги — ?doctor=ID
+  const linked = Number(params.get('doctor'));
+  team.current = doctorById(linked)?.id ?? doctorById(team.mine)?.id ?? team.doctors[0].id;
   // «Открыть приём» в уведомлении перед приёмом: сразу карточка этого приёма
   const appointmentId = params.get('appointment');
   if (appointmentId) {
     try {
-      cardScreen(await api('GET', `/api/appointments/${encodeURIComponent(appointmentId)}`));
+      const opened = await api('GET', `/api/appointments/${encodeURIComponent(appointmentId)}`);
+      if (doctorById(opened.doctorId)) team.current = opened.doctorId;
+      cardScreen(opened);
       return;
     } catch (e) {
       if (fatal(e)) return; // иначе (приём удалён, сеть) — просто «День»

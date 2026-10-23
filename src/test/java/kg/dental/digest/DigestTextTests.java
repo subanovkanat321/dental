@@ -78,7 +78,7 @@ class DigestTextTests {
 			NONE       | false | Напоминание не отправляли.
 			""")
 	void preNoticeSaysWhenAndPatientsAnswer(PatientReply reply, boolean reminded, String answer) {
-		var notice = new PreNotice(7, Instant.parse("2099-06-01T04:00:00Z"), Instant.parse("2099-06-01T04:30:00Z"),
+		var notice = new PreNotice(7, 1, Instant.parse("2099-06-01T04:00:00Z"), Instant.parse("2099-06-01T04:30:00Z"),
 				reply, reminded ? Instant.parse("2099-05-31T12:00:00Z") : null);
 
 		assertThat(DigestText.preNotice(notice, Instant.parse("2099-06-01T03:45:10Z"), BISHKEK))

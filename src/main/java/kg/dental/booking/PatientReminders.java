@@ -110,7 +110,7 @@ class PatientReminders implements BotCallbacks {
 		}
 		var a = result.get().appointment();
 		if (result.get().changed() && notifier.enabled()) {
-			notifier.send("Ответ на напоминание", doctorText(a, confirmed, properties.timeZone()),
+			notifier.send(a.doctorId(), "Ответ на напоминание", doctorText(a, confirmed, properties.timeZone()),
 					List.of(new DoctorNotifier.Link("Открыть приём", "appointment=" + a.id())));
 		}
 		return Optional.of(confirmed

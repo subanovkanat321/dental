@@ -112,12 +112,13 @@ class Reviews implements SchedulingConfigurer, BotCallbacks {
 			return Optional.empty();
 		}
 		var rating = Integer.parseInt(match.group(2));
-		var startAt = appointments.rateFromBot(Long.parseLong(match.group(1)), fromId, rating);
-		if (startAt.isEmpty()) {
+		var rated = appointments.rateFromBot(Long.parseLong(match.group(1)), fromId, rating);
+		if (rated.isEmpty()) {
 			return Optional.of(new Answer("Оценка уже сохранена", null));
 		}
 		if (notifier.enabled()) {
-			notifier.send("Оценка приёма", doctorText(startAt.get(), rating, properties.timeZone()), List.of());
+			notifier.send(rated.get().doctorId(), "Оценка приёма",
+					doctorText(rated.get().startAt(), rating, properties.timeZone()), List.of());
 		}
 		return Optional.of(new Answer("Спасибо за оценку!", thanksText(rating)));
 	}

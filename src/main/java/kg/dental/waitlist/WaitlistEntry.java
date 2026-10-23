@@ -30,14 +30,22 @@ class WaitlistEntry {
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
+	/** К какому врачу хочет (V11); null — к любому. */
+	private Long doctorId;
+
 	protected WaitlistEntry() {
 		// для JPA
 	}
 
-	WaitlistEntry(Patient patient, int durationMinutes, Instant createdAt) {
+	WaitlistEntry(Patient patient, Long doctorId, int durationMinutes, Instant createdAt) {
 		this.patient = patient;
+		this.doctorId = doctorId;
 		this.durationMinutes = durationMinutes;
 		this.createdAt = createdAt;
+	}
+
+	Long getDoctorId() {
+		return doctorId;
 	}
 
 	Long getId() {

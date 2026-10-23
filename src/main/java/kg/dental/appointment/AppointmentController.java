@@ -30,23 +30,24 @@ class AppointmentController {
 		this.service = service;
 	}
 
-	/** {@code ?date=2027-06-01} — день по Бишкеку. */
+	/** {@code ?date=2027-06-01&doctorId=1} — день врача по Бишкеку. */
 	@GetMapping
-	List<AppointmentView> day(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-		return service.day(date);
+	List<AppointmentView> day(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+			@RequestParam long doctorId) {
+		return service.day(date, doctorId);
 	}
 
 	/** {@code /api/appointments/counts?from=2027-06-01&days=21}: сколько приёмов в каждый день — для ленты дней. */
 	@GetMapping("/counts")
 	List<DayCount> counts(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-			@RequestParam(defaultValue = "21") int days) {
-		return service.dayCounts(from, Math.clamp(days, 1, 62));
+			@RequestParam(defaultValue = "21") int days, @RequestParam long doctorId) {
+		return service.dayCounts(from, Math.clamp(days, 1, 62), doctorId);
 	}
 
 	/** {@code /api/appointments/ratings?days=90}: оценки пациентов — в «Статистику». */
 	@GetMapping("/ratings")
-	RatingSummary ratings(@RequestParam(defaultValue = "90") int days) {
-		return service.ratings(Math.clamp(days, 1, 3650));
+	RatingSummary ratings(@RequestParam(defaultValue = "90") int days, @RequestParam(required = false) Long doctorId) {
+		return service.ratings(Math.clamp(days, 1, 3650), doctorId);
 	}
 
 	@GetMapping("/{id}")
@@ -54,10 +55,10 @@ class AppointmentController {
 		return service.get(id);
 	}
 
-	/** {@code /api/appointments/stats?weeks=8}: по неделям, текущая первой. */
+	/** {@code /api/appointments/stats?weeks=8&doctorId=1}: по неделям, текущая первой; без врача — весь кабинет. */
 	@GetMapping("/stats")
-	List<WeekStats> stats(@RequestParam(defaultValue = "8") int weeks) {
-		return service.weeklyStats(Math.clamp(weeks, 1, 52));
+	List<WeekStats> stats(@RequestParam(defaultValue = "8") int weeks, @RequestParam(required = false) Long doctorId) {
+		return service.weeklyStats(Math.clamp(weeks, 1, 52), doctorId);
 	}
 
 	/** {@code /api/appointments/recall?months=6}: кого пора позвать на профосмотр. */

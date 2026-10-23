@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import kg.dental.DentalProperties;
+import kg.dental.doctor.DoctorService;
 import kg.dental.patient.PatientService;
 import kg.dental.patient.PatientView;
 import kg.dental.shared.ConflictException;
@@ -49,9 +50,12 @@ public class AppointmentService {
 
 	private final ReviewQuery reviews;
 
+	private final DoctorService doctors;
+
 	AppointmentService(AppointmentRepository appointments, PatientService patients, Clock clock,
 			DentalProperties properties, AppointmentStatsQuery stats, RecallQuery recall, PreNoticeQuery preNotices,
-			ApplicationEventPublisher events, ReviewQuery reviews) {
+			ApplicationEventPublisher events, ReviewQuery reviews, DoctorService doctors) {
+		this.doctors = doctors;
 		this.reviews = reviews;
 		this.appointments = appointments;
 		this.patients = patients;
@@ -65,10 +69,10 @@ public class AppointmentService {
 
 	/** Обзор дня для уведомлений врачу: только числа и время. */
 	@Transactional(readOnly = true)
-	public DayOverview overview(LocalDate date, Instant now) {
+	public DayOverview overview(LocalDate date, Instant now, long doctorId) {
 		var zone = properties.timeZone();
 		var active = appointments
-			.findDay(date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
+			.findDay(doctorId, date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
 			.stream()
 			.filter(a -> a.getStatus() != AppointmentStatus.CANCELLED)
 			.toList();
@@ -85,10 +89,10 @@ public class AppointmentService {
 
 	/** Прошедшие за 7 дней приёмы без отметки «пришёл» / «не пришёл» (R7/D9). */
 	@Transactional(readOnly = true)
-	public long unmarkedWeek(Instant now) {
+	public long unmarkedWeek(Instant now, long doctorId) {
 		var zone = properties.timeZone();
 		var weekAgo = LocalDate.ofInstant(now, zone).minusDays(7).atStartOfDay(zone).toInstant();
-		return appointments.countUnmarked(weekAgo, now);
+		return appointments.countUnmarked(doctorId, weekAgo, now);
 	}
 
 	/** Приёмы, о которых пора предупредить врача; каждый — один раз (PreNoticeQuery). */
@@ -107,13 +111,14 @@ public class AppointmentService {
 
 	/** Оценка кнопкой в боте; пусто — не его приём, не спрашивали или уже оценил. */
 	@Transactional
-	public Optional<Instant> rateFromBot(long id, long telegramId, int rating) {
+	public Optional<ReviewQuery.Rated> rateFromBot(long id, long telegramId, int rating) {
 		return reviews.rate(id, telegramId, rating);
 	}
 
+	/** @param doctorId чьи оценки; null — всего кабинета */
 	@Transactional(readOnly = true)
-	public RatingSummary ratings(int days) {
-		return reviews.summary(clock.instant().minus(Duration.ofDays(days)));
+	public RatingSummary ratings(int days, Long doctorId) {
+		return reviews.summary(clock.instant().minus(Duration.ofDays(days)), doctorId);
 	}
 
 	/** Кого пора позвать на профосмотр: последний визит больше {@code months} месяцев назад. */
@@ -127,22 +132,22 @@ public class AppointmentService {
 
 	/** Неявки и приёмы по неделям — сравнить с тем, что было до приложения (2–3 неявки в неделю). */
 	@Transactional(readOnly = true)
-	public List<WeekStats> weeklyStats(int weeks) {
-		return stats.weeks(weeks, clock.instant(), properties.timeZone());
+	public List<WeekStats> weeklyStats(int weeks, Long doctorId) {
+		return stats.weeks(weeks, clock.instant(), properties.timeZone(), doctorId);
 	}
 
 	/** Приёмы календарного дня по Бишкеку, включая отменённые (в «Дне» они зачёркнуты). */
 	@Transactional(readOnly = true)
-	public List<DayCount> dayCounts(LocalDate from, int days) {
-		return stats.days(from, days, properties.timeZone());
+	public List<DayCount> dayCounts(LocalDate from, int days, long doctorId) {
+		return stats.days(from, days, properties.timeZone(), doctorId);
 	}
 
 	@Transactional(readOnly = true)
-	public List<AppointmentView> day(LocalDate date) {
+	public List<AppointmentView> day(LocalDate date, long doctorId) {
 		var zone = properties.timeZone();
 		var from = date.atStartOfDay(zone).toInstant();
 		var to = date.plusDays(1).atStartOfDay(zone).toInstant();
-		return appointments.findDay(from, to).stream().map(AppointmentView::of).toList();
+		return appointments.findDay(doctorId, from, to).stream().map(AppointmentView::of).toList();
 	}
 
 	/**
@@ -193,8 +198,9 @@ public class AppointmentService {
 	@Transactional
 	public AppointmentView create(AppointmentRequests.Create request) {
 		var patient = patients.require(request.patientId());
-		var appointment = new Appointment(patient, request.startAt(), Duration.ofMinutes(request.durationMinutes()),
-				clock.instant());
+		doctors.requireActive(request.doctorId());
+		var appointment = new Appointment(patient, request.doctorId(), request.startAt(),
+				Duration.ofMinutes(request.durationMinutes()), clock.instant());
 		return save(appointment);
 	}
 
@@ -221,8 +227,8 @@ public class AppointmentService {
 
 	/** Заявка пациента из бота (модуль booking): время проверяет база, как у любой записи. */
 	@Transactional
-	public AppointmentView request(Patient patient, Instant startAt, ServiceType serviceType) {
-		return save(Appointment.requested(patient, startAt, serviceType, clock.instant()));
+	public AppointmentView request(Patient patient, long doctorId, Instant startAt, ServiceType serviceType) {
+		return save(Appointment.requested(patient, doctorId, startAt, serviceType, clock.instant()));
 	}
 
 	/** Пациент сам отменяет свою заявку или запись — без версии: у него нет экрана врача. */

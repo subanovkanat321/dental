@@ -1,6 +1,6 @@
 // Самозапись пациента: всё, что видит в Mini App не-врач. Общие кусочки (DOM, запросы,
 // кнопки Telegram) приходят из app.js параметром ui — без циклических импортов.
-import { todayIn, timeOf, toInstant, formatPhone, bookingDays, whenText, serviceEmoji, breakNote, priceText } from './state.js';
+import { todayIn, timeOf, toInstant, formatPhone, bookingDays, whenText, serviceEmoji, breakNote, priceText, initials } from './state.js';
 
 const STATUS = {
   REQUESTED: '⏳ Ждёт подтверждения врача — ответ придёт в этот чат',
@@ -30,7 +30,31 @@ export function startPatient(ui, me) {
     return;
   }
   if (me.booking) bookingScreen(ui, me);
-  else bookScreen(ui, me);
+  else if (me.doctors.length === 1) bookScreen(ui, me, me.doctors[0]);
+  else doctorScreen(ui, me);
+}
+
+/** Профиль врача для шапки: фото, имя, пара слов. */
+function profileOf(d) {
+  return d ? { photoUrl: d.photoUrl, doctorName: d.fullName, about: d.about } : null;
+}
+
+/** Врачей несколько — сначала выбрать, к кому: у каждого своё кресло и своё время. */
+function doctorScreen(ui, me) {
+  const { h } = ui;
+  ui.mainButton.hide();
+  ui.backButton.hide();
+  ui.render(h('section', { class: 'screen' },
+    hero(h, 'Запись к стоматологу', 'Выберите врача, услугу и удобное время — врач подтвердит запись'),
+    h('h2', {}, 'Врач'),
+    me.doctors.length ? me.doctors.map((d) => h('button', {
+      type: 'button', class: 'doctor-card', onclick: () => bookScreen(ui, me, d),
+    },
+    d.photoUrl ? h('img', { src: d.photoUrl, alt: '', width: 64, height: 64 })
+      : h('span', { class: 'doctor-initials', 'aria-hidden': 'true' }, initials(d.fullName)),
+    h('span', { class: 'doctor-card-text' }, h('strong', {}, d.fullName), d.about ? h('span', { class: 'hint' }, d.about) : null),
+    h('span', { class: 'chevron', 'aria-hidden': 'true' }, '›')))
+      : h('div', { class: 'hint' }, 'Запись пока недоступна — позвоните в клинику.')));
 }
 
 /** «Ваша запись»: когда, что, подтверждена ли; отменить. */
@@ -62,7 +86,8 @@ function bookingScreen(ui, me) {
     },
   }, 'Отменить запись');
   ui.render(h('section', { class: 'screen' },
-    hero(h, 'Ваша запись', 'Ждём вас в клинике 😊', me.profile),
+    hero(h, 'Ваша запись', 'Ждём вас в клинике 😊', profileOf(me.doctors.find((d) => d.id === b.doctorId))
+      || { doctorName: b.doctorName }),
     h('div', { class: 'booking-card' },
       h('p', { class: 'big' }, '📅 ', capitalize(`${whenText(b.startAt)}, в ${timeOf(b.startAt)}`)),
       h('div', {}, `${serviceEmoji(b.serviceName || '')} `, b.serviceName || 'Приём у стоматолога'),
@@ -73,9 +98,11 @@ function bookingScreen(ui, me) {
 }
 
 /** Запись: услуга → день → время → имя, телефон из Telegram, согласие → «Записаться». */
-function bookScreen(ui, me) {
+function bookScreen(ui, me, doctor) {
   const { h } = ui;
-  ui.backButton.hide();
+  // Несколько врачей — «Назад» к выбору врача
+  if (me.doctors.length > 1) ui.backButton.set(() => doctorScreen(ui, me));
+  else ui.backButton.hide();
   let service = me.services.length === 1 ? me.services[0] : null;
   let date = todayIn();
   let chosen = '';
@@ -126,7 +153,7 @@ function bookScreen(ui, me) {
     grid.replaceChildren(h('div', { class: 'hint' }, 'Загрузка…'));
     let slots;
     try {
-      slots = await ui.api('GET', `/api/patient/slots?date=${date}&serviceTypeId=${service.id}`);
+      slots = await ui.api('GET', `/api/patient/slots?date=${date}&doctorId=${doctor.id}&serviceTypeId=${service.id}`);
     } catch (e) {
       if (mine === seq) grid.replaceChildren(h('div', { class: 'error' }, ui.errorText(e)));
       return;
@@ -203,7 +230,7 @@ function bookScreen(ui, me) {
     ui.mainButton.busy(true);
     try {
       const booking = await ui.api('POST', '/api/patient/booking', {
-        serviceTypeId: service.id, startAt: toInstant(date, chosen), fullName: nameInput.value, consent: true,
+        doctorId: doctor.id, serviceTypeId: service.id, startAt: toInstant(date, chosen), fullName: nameInput.value, consent: true,
       });
       ui.haptic('success');
       me.booking = booking;
@@ -230,7 +257,8 @@ function bookScreen(ui, me) {
   }
 
   ui.render(h('section', { class: 'screen' },
-    hero(h, 'Запись к стоматологу', 'Выберите услугу и удобное время — врач подтвердит запись', me.profile),
+    hero(h, 'Запись к стоматологу', 'Выберите услугу и удобное время — врач подтвердит запись', profileOf(doctor)),
+    me.doctors.length > 1 ? h('button', { type: 'button', class: 'link', onclick: () => doctorScreen(ui, me) }, '‹ Другой врач') : null,
     serviceBox,
     h('div', { class: 'field' }, h('span', {}, 'День'), dayBox),
     h('div', { class: 'field' }, h('span', {}, 'Время'), timeError, grid),

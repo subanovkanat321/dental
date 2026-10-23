@@ -65,7 +65,7 @@ class PatientRemindersTests {
 		var body = mvc.post().uri("/api/patient/booking").header(HttpHeaders.AUTHORIZATION, stranger())
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
-					{"serviceTypeId": %d, "startAt": "%s", "fullName": "Бакыт Маматов", "consent": true}"""
+					{"doctorId": 1, "serviceTypeId": %d, "startAt": "%s", "fullName": "Бакыт Маматов", "consent": true}"""
 				.formatted(serviceId, start))
 			.exchange().getResponse().getContentAsString();
 		appointmentId = ((Number) JsonPath.read(body, "$.id")).longValue();

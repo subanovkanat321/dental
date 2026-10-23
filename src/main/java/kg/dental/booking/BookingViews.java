@@ -6,7 +6,7 @@ import java.util.List;
 import kg.dental.appointment.AppointmentStatus;
 import kg.dental.appointment.AppointmentView;
 import kg.dental.appointment.SlotsView;
-import kg.dental.profile.ProfileView;
+import kg.dental.doctor.DoctorView;
 import kg.dental.servicetype.ServiceTypeView;
 
 /** Ответы API самозаписи. Пациент видит только своё: ни чужих имён, ни расписания целиком. */
@@ -16,10 +16,11 @@ final class BookingViews {
 	}
 
 	/** Запись пациента: время, услуга и статус (REQUESTED — ждёт врача, SCHEDULED — подтверждена). */
-	record Booking(long id, Instant startAt, Instant endAt, String serviceName, AppointmentStatus status) {
+	record Booking(long id, Instant startAt, Instant endAt, String serviceName, AppointmentStatus status,
+			long doctorId, String doctorName) {
 
-		static Booking of(AppointmentView a) {
-			return new Booking(a.id(), a.startAt(), a.endAt(), a.serviceName(), a.status());
+		static Booking of(AppointmentView a, String doctorName) {
+			return new Booking(a.id(), a.startAt(), a.endAt(), a.serviceName(), a.status(), a.doctorId(), doctorName);
 		}
 
 	}
@@ -27,11 +28,15 @@ final class BookingViews {
 	/**
 	 * Всё, что нужно первому экрану Mini App у не-врача.
 	 *
-	 * @param doctor это врач — Mini App покажет экран врача
+	 * @param doctor это сотрудник (врач или админ) — Mini App покажет экран врача
+	 * @param admin заводит врачей («Меню → Врачи»)
+	 * @param doctorId врач, которым работает этот сотрудник; null — админ без своего кресла
+	 * @param doctors работающие врачи: сотруднику — переключатель «Дня», пациенту — выбор врача
 	 * @param phone номер, которым человек поделился; null — ещё не делился
 	 */
-	record Me(boolean doctor, boolean bookingEnabled, String fullName, String phone, Booking booking,
-			List<ServiceTypeView> services, String clinicContact, int daysAhead, ProfileView profile) {
+	record Me(boolean doctor, boolean admin, Long doctorId, boolean bookingEnabled, String fullName, String phone,
+			Booking booking, List<ServiceTypeView> services, String clinicContact, int daysAhead,
+			List<DoctorView> doctors) {
 	}
 
 	/**

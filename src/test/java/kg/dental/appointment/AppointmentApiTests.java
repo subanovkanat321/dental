@@ -91,7 +91,7 @@ class AppointmentApiTests {
 	@Test
 	void unknownPatientIs404() {
 		var result = mvc.post().uri("/api/appointments").contentType(MediaType.APPLICATION_JSON).content("""
-				{"patientId": 999999, "startAt": "%s", "durationMinutes": 30}""".formatted(FUTURE)).header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
+				{"doctorId": 1, "patientId": 999999, "startAt": "%s", "durationMinutes": 30}""".formatted(FUTURE)).header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
 
 		assertThat(result).hasStatus(HttpStatus.NOT_FOUND).bodyJson().extractingPath("$.detail")
 			.isEqualTo("Пациент не найден");
@@ -373,7 +373,7 @@ class AppointmentApiTests {
 		// 2099-06-01T18:00Z — уже 2 июня
 		create("2099-06-01T18:00:00Z", 30);
 
-		var json = assertThat(mvc.get().uri("/api/appointments?date=2099-06-01").header(HttpHeaders.AUTHORIZATION, TestInitData.doctor())).hasStatusOk().bodyJson();
+		var json = assertThat(mvc.get().uri("/api/appointments?doctorId=1&date=2099-06-01").header(HttpHeaders.AUTHORIZATION, TestInitData.doctor())).hasStatusOk().bodyJson();
 		json.extractingPath("$[*].startAt").asArray()
 			.containsExactly("2099-05-31T18:00:00Z", "2099-06-01T05:00:00Z");
 		json.extractingPath("$[1].status").isEqualTo("CANCELLED");
@@ -390,7 +390,7 @@ class AppointmentApiTests {
 				{"version": 0, "status": "CANCELLED"}""");
 		jdbc.update("update appointment set status = 'REQUESTED' where start_at = '2099-05-31T18:00:00Z'");
 
-		var json = assertThat(mvc.get().uri("/api/appointments/counts?from=2099-05-31&days=3")
+		var json = assertThat(mvc.get().uri("/api/appointments/counts?doctorId=1&from=2099-05-31&days=3")
 			.header(HttpHeaders.AUTHORIZATION, TestInitData.doctor())).hasStatusOk().bodyJson();
 		json.extractingPath("$[*].date").asArray().containsExactly("2099-05-31", "2099-06-01", "2099-06-02");
 		json.extractingPath("$[*].booked").asArray().containsExactly(1, 2, 0);
@@ -399,7 +399,7 @@ class AppointmentApiTests {
 
 	private MvcTestResult create(String startAt, int durationMinutes) {
 		return mvc.post().uri("/api/appointments").contentType(MediaType.APPLICATION_JSON).content("""
-				{"patientId": %d, "startAt": "%s", "durationMinutes": %d}"""
+				{"doctorId": 1, "patientId": %d, "startAt": "%s", "durationMinutes": %d}"""
 			.formatted(patientId, startAt, durationMinutes)).header(HttpHeaders.AUTHORIZATION, TestInitData.doctor()).exchange();
 	}
 

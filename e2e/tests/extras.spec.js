@@ -8,7 +8,6 @@ import {
 test.beforeEach(resetDb);
 test.afterEach(async () => {
   await db.query("update service_type set price_som = null");
-  await db.query('update clinic_profile set doctor_name = null, about = null, photo = null, photo_type = null, photo_version = 0');
 });
 
 test('врач ставит цену — пациент видит «от 2 000 сом» на плитке', async ({ browser }) => {
@@ -27,10 +26,11 @@ test('врач ставит цену — пациент видит «от 2 000 
 });
 
 test('профиль врача: имя и «о себе» — в шапке записи у пациента', async ({ browser }) => {
+  await db.query('update doctor set telegram_id = 111 where id = 1'); // админ работает и врачом
   const doctor = await browser.newPage();
   await openApp(doctor);
   await doctor.getByRole('button', { name: 'Меню' }).click();
-  await doctor.getByRole('button', { name: 'Профиль врача' }).click();
+  await doctor.getByRole('button', { name: 'Мой профиль' }).click();
   await doctor.locator('input[type=text]').fill('Айгерим Садыкова');
   await doctor.locator('textarea').fill('Стоматолог-терапевт, 10 лет опыта');
   await pressMainButton(doctor);
@@ -44,20 +44,21 @@ test('профиль врача: имя и «о себе» — в шапке з�
 });
 
 test('профиль врача: загруженное фото видно врачу и пациенту', async ({ browser }) => {
+  await db.query('update doctor set telegram_id = 111 where id = 1');
   const doctor = await browser.newPage();
   await openApp(doctor);
   await doctor.getByRole('button', { name: 'Меню' }).click();
-  await doctor.getByRole('button', { name: 'Профиль врача' }).click();
+  await doctor.getByRole('button', { name: 'Мой профиль' }).click();
   // Картинка 2×2 PNG: браузер уменьшит и пережмёт её в JPEG перед отправкой
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR4nGP8z8Dwn4GBgYGJgYGBAQAJBgEBnLtq9wAAAABJRU5ErkJggg==', 'base64');
   await doctor.locator('#photo-file').setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: png });
   await expect(doctor.getByAltText('Фото врача')).toBeVisible();
-  const { rows } = await db.query('select photo_type, photo_version from clinic_profile');
+  const { rows } = await db.query('select photo_type, photo_version from doctor where id = 1');
   expect(rows[0]).toEqual({ photo_type: 'image/jpeg', photo_version: 1 });
 
   const patient = await browser.newPage();
   await openApp(patient, { initData: signInitData(STRANGER) });
-  await expect(patient.locator('.hero img.hero-photo')).toHaveAttribute('src', '/profile/photo?v=1');
+  await expect(patient.locator('.hero img.hero-photo')).toHaveAttribute('src', '/doctors/1/photo?v=1');
 });
 
 test('«Пришёл» → «Записать на следующий визит»: тот же пациент и длительность, через неделю', async ({ page }) => {

@@ -54,7 +54,7 @@ class BookingApiTests {
 
 		assertThat(get(TestInitData.doctor(), "/api/patient/me")).bodyJson().extractingPath("$.doctor").isEqualTo(true);
 		// Остальной API посторонним по-прежнему закрыт
-		assertThat(get(stranger(), "/api/appointments?date=2099-06-01")).hasStatus(HttpStatus.FORBIDDEN);
+		assertThat(get(stranger(), "/api/appointments?doctorId=1&date=2099-06-01")).hasStatus(HttpStatus.FORBIDDEN);
 	}
 
 	@Test
@@ -82,7 +82,7 @@ class BookingApiTests {
 		assertThat(patient.get("telegram_id")).isEqualTo(TestInitData.STRANGER_ID);
 		assertThat(patient.get("consent_at")).isNotNull();
 		// Время занято и для врача, и для других пациентов
-		assertThat(get(stranger(), "/api/patient/slots?date=" + day(3) + "&serviceTypeId=" + serviceId)).bodyJson()
+		assertThat(get(stranger(), "/api/patient/slots?doctorId=1&date=" + day(3) + "&serviceTypeId=" + serviceId)).bodyJson()
 			.extractingPath("$.starts").asArray().doesNotContain(instant(day(3), "10:00"));
 
 		assertThat(book(day(4), "10:00", "Бакыт М.", true)).hasStatus(HttpStatus.CONFLICT)
@@ -98,7 +98,7 @@ class BookingApiTests {
 		assertThat(book(day(3), "10:07", "Бакыт М.", true)).hasStatus(HttpStatus.CONFLICT); // не на сетке
 		assertThat(book(day(3), "20:00", "Бакыт М.", true)).hasStatus(HttpStatus.CONFLICT); // вне рабочих часов
 		assertThat(book(day(45), "10:00", "Бакыт М.", true)).hasStatus(HttpStatus.CONFLICT); // дальше 30 дней
-		assertThat(get(stranger(), "/api/patient/slots?date=" + day(45) + "&serviceTypeId=" + serviceId)).bodyJson()
+		assertThat(get(stranger(), "/api/patient/slots?doctorId=1&date=" + day(45) + "&serviceTypeId=" + serviceId)).bodyJson()
 			.extractingPath("$.starts").asArray().isEmpty();
 	}
 
@@ -144,7 +144,7 @@ class BookingApiTests {
 
 	private MvcTestResult book(LocalDate date, String time, String name, boolean consent) {
 		return post(stranger(), "/api/patient/booking", """
-				{"serviceTypeId": %d, "startAt": "%s", "fullName": "%s", "consent": %s}"""
+				{"doctorId": 1, "serviceTypeId": %d, "startAt": "%s", "fullName": "%s", "consent": %s}"""
 			.formatted(serviceId, instant(date, time), name, consent));
 	}
 

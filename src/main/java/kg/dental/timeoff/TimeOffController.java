@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/time-off")
 class TimeOffController {
 
-	record Request(DayOfWeek weekday, LocalDate firstDay, LocalDate lastDay, LocalTime startTime, LocalTime endTime,
+	record Request(Long doctorId, DayOfWeek weekday, LocalDate firstDay, LocalDate lastDay, LocalTime startTime, LocalTime endTime,
 			String title, String emoji) {
 	}
 
@@ -38,7 +38,7 @@ class TimeOffController {
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	TimeOffView create(@RequestBody Request r) {
-		return service.create(r.weekday(), r.firstDay(), r.lastDay(), r.startTime(), r.endTime(), r.title(), r.emoji());
+		return service.create(r.doctorId(), r.weekday(), r.firstDay(), r.lastDay(), r.startTime(), r.endTime(), r.title(), r.emoji());
 	}
 
 	@DeleteMapping("/{id}")

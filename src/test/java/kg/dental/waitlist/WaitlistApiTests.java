@@ -116,12 +116,12 @@ class WaitlistApiTests {
 
 	private MvcTestResult add(long patientId, int duration) {
 		return post("/api/waitlist", """
-				{"patientId": %d, "durationMinutes": %d}""".formatted(patientId, duration));
+				{"doctorId": 1, "patientId": %d, "durationMinutes": %d}""".formatted(patientId, duration));
 	}
 
 	private MvcTestResult book(long entry, String startAt) {
 		return post("/api/waitlist/" + entry + "/book", """
-				{"startAt": "%s"}""".formatted(startAt));
+				{"doctorId": 1, "startAt": "%s"}""".formatted(startAt));
 	}
 
 	private MvcTestResult post(String uri, String body) {
@@ -155,7 +155,7 @@ class WaitlistApiTests {
 	private long appointment(long patient, String start, String status) {
 		var startAt = Instant.parse(start);
 		return jdbc.queryForObject(
-				"insert into appointment (patient_id, start_at, end_at, status) values (?, ?, ?, ?) returning id",
+				"insert into appointment (doctor_id, patient_id, start_at, end_at, status) values (1, ?, ?, ?, ?) returning id",
 				Long.class, patient, Timestamp.from(startAt), Timestamp.from(startAt.plusSeconds(1800)), status);
 	}
 

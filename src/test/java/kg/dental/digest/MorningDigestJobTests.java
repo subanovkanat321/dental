@@ -86,7 +86,7 @@ class MorningDigestJobTests {
 				Не отмечено за неделю: 1 — отметьте «Пришёл» или «Не пришёл».""");
 		assertThat(text).doesNotContain("Айгуль", "Токтогулова", PHONE, "555123456", "123456");
 		verify(telegram).sendMessage(eq(TestInitData.DOCTOR_ID), anyString(),
-				eq(List.of(button("Открыть сегодня", null), button("Открыть завтра", "day=tomorrow"))));
+				eq(List.of(button("Открыть сегодня", "doctor=1"), button("Открыть завтра", "day=tomorrow&doctor=1"))));
 	}
 
 	@Test
@@ -119,7 +119,7 @@ class MorningDigestJobTests {
 
 		assertThat(sent()).isEqualTo("Через 10 мин, в 09:10 — приём (30 мин). Пациент подтвердил.");
 		verify(telegram).sendMessage(eq(TestInitData.DOCTOR_ID), anyString(),
-				eq(List.of(button("Открыть приём", "appointment=" + soon))));
+				eq(List.of(button("Открыть приём", "appointment=" + soon + "&doctor=1"))));
 	}
 
 	@Test
@@ -161,8 +161,8 @@ class MorningDigestJobTests {
 	private long insert(String start, String status, String reply, boolean reminded) {
 		var startAt = Instant.parse(start);
 		return jdbc.queryForObject("""
-				insert into appointment (patient_id, start_at, end_at, status, reply, reminder_opened_at)
-				values (?, ?, ?, ?, ?, ?) returning id""", Long.class, patientId, Timestamp.from(startAt),
+				insert into appointment (doctor_id, patient_id, start_at, end_at, status, reply, reminder_opened_at)
+				values (1, ?, ?, ?, ?, ?, ?) returning id""", Long.class, patientId, Timestamp.from(startAt),
 				Timestamp.from(startAt.plusSeconds(1800)), status, reply,
 				reminded ? Timestamp.from(startAt.minusSeconds(86400)) : null);
 	}

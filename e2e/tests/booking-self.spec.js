@@ -56,7 +56,7 @@ test('занятое время пациенту не показывается',
   const { rows } = await db.query("insert into patient (full_name, phone) values ('Кто-то', '996555000001') returning id");
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bishkek' })
     .format(new Date(Date.now() + 2 * 86400000));
-  await db.query(`insert into appointment (patient_id, start_at, end_at) values ($1, $2, $3)`,
+  await db.query(`insert into appointment (doctor_id, patient_id, start_at, end_at) values (1, $1, $2, $3)`,
     [rows[0].id, new Date(`${day}T10:00:00+06:00`), new Date(`${day}T10:30:00+06:00`)]);
   await openApp(page, { initData: signInitData(STRANGER) });
 

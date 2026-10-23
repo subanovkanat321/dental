@@ -71,6 +71,10 @@ public class Appointment {
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
+	/** Врач приёма (V11): у каждого своё кресло и своё расписание. Не меняется после записи. */
+	@Column(nullable = false, updatable = false)
+	private Long doctorId;
+
 	/** Кто записал: врач или пациент сам через бота (V5). */
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, updatable = false)
@@ -89,8 +93,9 @@ public class Appointment {
 		// для JPA
 	}
 
-	Appointment(Patient patient, Instant startAt, Duration duration, Instant createdAt) {
+	Appointment(Patient patient, long doctorId, Instant startAt, Duration duration, Instant createdAt) {
 		this.patient = patient;
+		this.doctorId = doctorId;
 		this.startAt = startAt;
 		this.endAt = startAt.plus(duration);
 		this.status = SCHEDULED;
@@ -100,8 +105,9 @@ public class Appointment {
 	}
 
 	/** Заявка пациента из бота: время занято сразу, врач подтверждает или отклоняет. */
-	static Appointment requested(Patient patient, Instant startAt, ServiceType serviceType, Instant createdAt) {
-		var appointment = new Appointment(patient, startAt, Duration.ofMinutes(serviceType.getDurationMinutes()),
+	static Appointment requested(Patient patient, long doctorId, Instant startAt, ServiceType serviceType,
+			Instant createdAt) {
+		var appointment = new Appointment(patient, doctorId, startAt, Duration.ofMinutes(serviceType.getDurationMinutes()),
 				createdAt);
 		appointment.status = REQUESTED;
 		appointment.source = Source.PATIENT;
@@ -211,6 +217,10 @@ public class Appointment {
 
 	public AppointmentStatus getStatus() {
 		return status;
+	}
+
+	public Long getDoctorId() {
+		return doctorId;
 	}
 
 	public Short getRating() {

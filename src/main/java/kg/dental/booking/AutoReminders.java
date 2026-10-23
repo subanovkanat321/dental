@@ -10,6 +10,7 @@ import kg.dental.appointment.AppointmentService;
 import kg.dental.appointment.AppointmentStatus;
 import kg.dental.appointment.PatientReply;
 import kg.dental.digest.DoctorNotifier;
+import kg.dental.doctor.DoctorService;
 import kg.dental.digest.NotifyProperties;
 import kg.dental.shared.ConflictException;
 import org.slf4j.Logger;
@@ -43,8 +44,11 @@ class AutoReminders implements SchedulingConfigurer {
 
 	private final Clock clock;
 
+	private final DoctorService doctors;
+
 	AutoReminders(PatientReminders reminders, AppointmentService appointments, DoctorNotifier notifier,
-			NotifyProperties notify, DentalProperties properties, Clock clock) {
+			NotifyProperties notify, DentalProperties properties, Clock clock, DoctorService doctors) {
+		this.doctors = doctors;
 		this.reminders = reminders;
 		this.appointments = appointments;
 		this.notifier = notifier;
@@ -73,8 +77,9 @@ class AutoReminders implements SchedulingConfigurer {
 		var tomorrow = LocalDate.ofInstant(now, properties.timeZone()).plusDays(1);
 		MDC.put("jobId", "patient-reminders-" + tomorrow);
 		try {
-			var due = appointments.day(tomorrow)
+			var due = doctors.active()
 				.stream()
+				.flatMap(d -> appointments.day(tomorrow, d.id()).stream())
 				.filter(a -> a.status() == AppointmentStatus.SCHEDULED && a.patient().telegram()
 						&& a.reminderOpenedAt() == null && a.reply() == PatientReply.NONE)
 				.toList();

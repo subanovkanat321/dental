@@ -28,7 +28,7 @@ class AppointmentStatsQuery {
 	}
 
 	/** Приёмы по дням с {@code from} на {@code days} дней вперёд (по Бишкеку); пустые дни — нулями. */
-	List<DayCount> days(LocalDate from, int days, ZoneId zone) {
+	List<DayCount> days(LocalDate from, int days, ZoneId zone, long doctorId) {
 		var to = from.plusDays(days);
 		var byDay = new HashMap<LocalDate, DayCount>();
 		jdbc.sql("""
@@ -36,9 +36,10 @@ class AppointmentStatsQuery {
 				       count(*) filter (where status <> 'CANCELLED') as booked,
 				       count(*) filter (where status = 'REQUESTED') as requested
 				from appointment
-				where start_at >= :from and start_at < :to
+				where doctor_id = :doctorId and start_at >= :from and start_at < :to
 				group by 1""")
 			.param("zone", zone.getId())
+			.param("doctorId", doctorId)
 			.param("from", Timestamp.from(from.atStartOfDay(zone).toInstant()))
 			.param("to", Timestamp.from(to.atStartOfDay(zone).toInstant()))
 			.query((rs, n) -> new DayCount(rs.getObject("day", LocalDate.class), rs.getLong("booked"),
@@ -49,7 +50,8 @@ class AppointmentStatsQuery {
 	}
 
 	/** Последние {@code weeks} недель по Бишкеку, текущая первой; недели без приёмов — нулями. */
-	List<WeekStats> weeks(int weeks, Instant now, ZoneId zone) {
+	/** @param doctorId null — весь кабинет */
+	List<WeekStats> weeks(int weeks, Instant now, ZoneId zone, Long doctorId) {
 		var thisWeek = LocalDate.ofInstant(now, zone).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
 		var first = thisWeek.minusWeeks(weeks - 1L);
 		var rows = jdbc.sql("""
@@ -63,8 +65,10 @@ class AppointmentStatsQuery {
 				                        and (reminder_opened_at is not null or reply <> 'NONE')) as reminded
 				from appointment
 				where start_at >= :from and start_at < :to
+				  and (cast(:doctorId as bigint) is null or doctor_id = :doctorId)
 				group by 1""")
 			.param("zone", zone.getId())
+			.param("doctorId", doctorId)
 			.param("now", Timestamp.from(now))
 			.param("from", Timestamp.from(first.atStartOfDay(zone).toInstant()))
 			.param("to", Timestamp.from(thisWeek.plusWeeks(1).atStartOfDay(zone).toInstant()))

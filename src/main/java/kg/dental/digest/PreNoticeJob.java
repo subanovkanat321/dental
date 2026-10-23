@@ -45,7 +45,7 @@ class PreNoticeJob {
 		for (var notice : appointments.claimPreNotices(now, Duration.ofMinutes(notify.beforeMinutes()))) {
 			MDC.put("jobId", "pre-notice-" + notice.id());
 			try {
-				notifier.send("Перед приёмом", DigestText.preNotice(notice, now, properties.timeZone()),
+				notifier.send(notice.doctorId(), "Перед приёмом", DigestText.preNotice(notice, now, properties.timeZone()),
 						List.of(new DoctorNotifier.Link("Открыть приём", "appointment=" + notice.id())));
 			}
 			finally {

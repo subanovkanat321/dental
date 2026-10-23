@@ -40,34 +40,41 @@ class ReviewQuery {
 			.list();
 	}
 
+	/** Оценённый приём: когда был и у какого врача — для уведомления врачу. */
+	public record Rated(Instant startAt, long doctorId) {
+	}
+
 	/**
 	 * Оценка кнопкой: только свой приём (тот же Telegram id), только если спрашивали и ещё не
 	 * оценил. Версию приёма не меняет: оценка — не правка врача, его экран не устареет.
 	 *
-	 * @return начало приёма — для уведомления врачу; пусто — оценку не приняли
+	 * @return приём — для уведомления врачу; пусто — оценку не приняли
 	 */
-	Optional<Instant> rate(long appointmentId, long telegramId, int rating) {
+	Optional<Rated> rate(long appointmentId, long telegramId, int rating) {
 		return jdbc.sql("""
 				update appointment a set rating = :rating
 				from patient p
 				where a.id = :id and p.id = a.patient_id and p.telegram_id = :telegramId
 				  and a.status = 'DONE' and a.review_asked_at is not null and a.rating is null
-				returning a.start_at""")
+				returning a.start_at, a.doctor_id""")
 			.param("rating", rating)
 			.param("id", appointmentId)
 			.param("telegramId", telegramId)
-			.query((rs, n) -> rs.getTimestamp("start_at").toInstant())
+			.query((rs, n) -> new Rated(rs.getTimestamp("start_at").toInstant(), rs.getLong("doctor_id")))
 			.optional();
 	}
 
-	RatingSummary summary(Instant since) {
+	/** @param doctorId null — весь кабинет */
+	RatingSummary summary(Instant since, Long doctorId) {
 		return jdbc.sql("""
 				select count(rating) as count, avg(rating) as average,
 				       count(*) filter (where rating = 1) as r1, count(*) filter (where rating = 2) as r2,
 				       count(*) filter (where rating = 3) as r3, count(*) filter (where rating = 4) as r4,
 				       count(*) filter (where rating = 5) as r5
-				from appointment where rating is not null and start_at >= :since""")
+				from appointment where rating is not null and start_at >= :since
+				  and (cast(:doctorId as bigint) is null or doctor_id = :doctorId)""")
 			.param("since", Timestamp.from(since))
+			.param("doctorId", doctorId)
 			.query((rs, n) -> new RatingSummary(rs.getLong("count"),
 					rs.getBigDecimal("average") == null ? null : rs.getBigDecimal("average").setScale(1, RoundingMode.HALF_UP),
 					List.of(rs.getLong("r1"), rs.getLong("r2"), rs.getLong("r3"), rs.getLong("r4"), rs.getLong("r5"))))
