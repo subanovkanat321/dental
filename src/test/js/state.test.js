@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  rowState, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
+  rowState, serviceEmoji, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
   dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, bookingDays, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
@@ -179,4 +179,12 @@ test('дни для самозаписи', () => {
   const days = bookingDays('2099-06-01', 4);
   assert.deepEqual(days.map((d) => d.label), ['Сегодня', 'Завтра', 'Ср 3', 'Чт 4']);
   assert.equal(days[3].date, '2099-06-04');
+});
+
+test('serviceEmoji: по ключевому слову, незнакомая — зуб', () => {
+  assert.equal(serviceEmoji('Консультация по брекетам'), '😁');
+  assert.equal(serviceEmoji('Лечение кариеса'), '🦷');
+  assert.equal(serviceEmoji('Профессиональная чистка'), '✨');
+  assert.equal(serviceEmoji('Осмотр и консультация'), '🩺');
+  assert.equal(serviceEmoji('Что-то новое'), '🦷');
 });

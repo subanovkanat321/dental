@@ -10,17 +10,17 @@ const OFFSET = '+06:00';
  * tone — цвет: ok, wait, bad, hint.
  */
 export function rowState(a, now = new Date()) {
-  if (a.status === 'CANCELLED') return { label: 'Отменён', icon: '✕', tone: 'hint', struck: true };
-  if (a.status === 'DONE') return { label: 'Пришёл', icon: '✓', tone: 'ok' };
-  if (a.status === 'NO_SHOW') return { label: 'Не пришёл', icon: '!', tone: 'bad' };
+  if (a.status === 'CANCELLED') return { label: 'Отменён', icon: '❌', tone: 'hint', struck: true };
+  if (a.status === 'DONE') return { label: 'Пришёл', icon: '✅', tone: 'ok' };
+  if (a.status === 'NO_SHOW') return { label: 'Не пришёл', icon: '🚷', tone: 'bad' };
   // Заявка пациента из бота: время занято, ждёт решения врача
-  if (a.status === 'REQUESTED') return { label: 'Заявка — подтвердите', icon: '✱', tone: 'wait' };
-  if (new Date(a.endAt) < now) return { label: 'Отметьте: пришёл?', icon: '?', tone: 'wait' };
-  if (a.reply === 'CONFIRMED') return { label: 'Придёт', icon: '●', tone: 'ok' };
-  if (a.reply === 'RESCHEDULE') return { label: 'Перенос', icon: '↻', tone: 'wait' };
-  if (a.reply === 'NO_ANSWER') return { label: 'Нет ответа', icon: '?', tone: 'wait' };
-  if (a.reminderOpenedAt) return { label: 'Ждём ответа', icon: '◐', tone: 'wait' };
-  return { label: 'Не напомнили', icon: '○', tone: 'hint' };
+  if (a.status === 'REQUESTED') return { label: 'Заявка — подтвердите', icon: '🆕', tone: 'wait' };
+  if (new Date(a.endAt) < now) return { label: 'Отметьте: пришёл?', icon: '❓', tone: 'wait' };
+  if (a.reply === 'CONFIRMED') return { label: 'Придёт', icon: '👍', tone: 'ok' };
+  if (a.reply === 'RESCHEDULE') return { label: 'Перенос', icon: '🔄', tone: 'wait' };
+  if (a.reply === 'NO_ANSWER') return { label: 'Нет ответа', icon: '📵', tone: 'wait' };
+  if (a.reminderOpenedAt) return { label: 'Ждём ответа', icon: '⏳', tone: 'wait' };
+  return { label: 'Не напомнили', icon: '🔔', tone: 'hint' };
 }
 
 /** Сегодняшняя дата по Бишкеку: 'YYYY-MM-DD'. */
@@ -235,4 +235,13 @@ export function bookingDays(today, n) {
         .format(new Date(`${date}T00:00:00Z`)).replace(',', '');
     return { date, label: label.charAt(0).toUpperCase() + label.slice(1) };
   });
+}
+
+/** Эмодзи услуги по названию — для плиток самозаписи; незнакомая услуга — зуб. */
+export function serviceEmoji(name) {
+  const n = name.toLowerCase();
+  const map = [['брекет', '😁'], ['кариес', '🦷'], ['чистк', '✨'], ['гигиен', '✨'], ['удален', '🩹'],
+    ['канал', '🔬'], ['отбел', '💎'], ['имплант', '🔩'], ['протез', '👑'], ['коронк', '👑'], ['детск', '🧸'],
+    ['осмотр', '🩺'], ['консульт', '🩺']];
+  return map.find(([key]) => n.includes(key))?.[1] || '🦷';
 }

@@ -31,8 +31,61 @@ function h(tag, props = {}, ...children) {
     else el.setAttribute(key, value === true ? '' : value);
   }
   el.append(...children.flat().filter((c) => c !== null && c !== undefined && c !== false));
+  // Кнопке-действию — эмодзи-иконка по подписи. aria-hidden: скринридер читает только подпись
+  const icon = /\bbtn\b/.test(props.class || '') && typeof children[0] === 'string' && ICONS[children[0]];
+  if (icon) el.prepend(h('span', { class: 'ico', 'aria-hidden': 'true' }, icon));
   return el;
 }
+
+/** Иконки кнопок — в одном месте, чтобы не расставлять их по всему коду. */
+const ICONS = {
+  Подтвердить: '✅',
+  Перенести: '🗓️',
+  'Отклонить заявку': '🚫',
+  'Напомнить в Telegram': '✈️',
+  'Напомнить в WhatsApp': '💬',
+  'Написать в WhatsApp': '💬',
+  Позвонить: '📞',
+  Пришёл: '✅',
+  'Не пришёл': '🚷',
+  'Отменить приём': '✖️',
+  Восстановить: '↩️',
+  'Исправить: не пришёл': '🚷',
+  'Исправить: пришёл': '✅',
+  Придёт: '👍',
+  Перенос: '🔄',
+  'Нет ответа': '📵',
+  'Пациенты и лист ожидания': '👥',
+  'Позвать на профосмотр': '🔔',
+  'Статистика неявок': '📊',
+  'Услуги для самозаписи': '🦷',
+  'Записать снова': '➕',
+  'Изменить имя или телефон': '✏️',
+  'Поделиться номером': '📱',
+  'Отменить запись': '✖️',
+  Повторить: '🔄',
+};
+
+/** Значок SVG (белый, 24×24) для круглых кнопок WhatsApp и Telegram. */
+function svgIcon(path, filled) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const shape = document.createElementNS(ns, 'path');
+  shape.setAttribute('d', path);
+  shape.setAttribute('fill', filled ? 'currentColor' : 'none');
+  if (!filled) {
+    shape.setAttribute('stroke', 'currentColor');
+    shape.setAttribute('stroke-width', '2');
+    shape.setAttribute('stroke-linejoin', 'round');
+  }
+  svg.append(shape);
+  return svg;
+}
+
+const CHAT_ICON = 'M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3z';
+const PLANE_ICON = 'M21.4 3.6 2.9 10.7c-1 .4-1 1.5 0 1.8l4.6 1.4 1.8 5.6c.2.7 1.1.9 1.6.4l2.6-2.4 4.8 3.5c.6.4 1.4.1 1.6-.6l3.2-15.2c.2-.9-.7-1.6-1.5-1.2zM9.6 14.2l8.2-7.3-6.4 8.5-.3 3z';
 
 const app = document.getElementById('app');
 function render(...nodes) {
@@ -343,7 +396,8 @@ async function dayScreen(date, flashId) {
   }
 
   if (appointments.length === 0 && slots.free.length === 0) {
-    render(head, h('div', { class: 'message hint' }, 'На этот день записей нет'));
+    render(head, h('div', { class: 'message hint' }, h('div', { class: 'empty-emoji', 'aria-hidden': 'true' }, slots.workingDay ? '🗓️' : '🌴'),
+      'На этот день записей нет'));
     note.textContent = slots.workingDay ? '' : 'Выходной';
     return;
   }
@@ -377,7 +431,7 @@ function freeRow(date, slot, waitlist = []) {
 function row(a, isNext, flash, now, redraw) {
   const failed = unsaved.has(a.id);
   // ER2: недошедшая отметка — локальное состояние строки, не из базы
-  const state = failed ? { label: 'Не сохранено · повторить', icon: '!', tone: 'bad' } : rowState(a, now);
+  const state = failed ? { label: 'Не сохранено · повторить', icon: '⚠️', tone: 'bad' } : rowState(a, now);
   const classes = ['row', isNext && 'next', flash && 'flash', state.struck && 'struck'].filter(Boolean).join(' ');
   const viaBot = a.patient.telegram && !failed;
   const wa = canRemind(a, now) ? h('button', {
@@ -395,9 +449,9 @@ function row(a, isNext, flash, now, redraw) {
         remindBest(a, redraw);
       }
     },
-  }, failed ? '↻' : (viaBot ? 'TG' : 'WA')) : null;
+  }, failed ? '↻' : [svgIcon(viaBot ? PLANE_ICON : CHAT_ICON, viaBot), h('span', { class: 'sr-only' }, viaBot ? 'TG' : 'WA')]) : null;
   return h('li', {
-    class: classes, role: 'listitem', tabindex: 0,
+    class: classes, role: 'listitem', tabindex: 0, 'data-tone': state.tone,
     onclick: () => cardScreen(a),
     onkeydown: (e) => e.key === 'Enter' && cardScreen(a),
   },
@@ -1177,7 +1231,18 @@ async function start() {
   if (tg) {
     tg.ready();
     tg.expand();
-    const applyScheme = () => document.documentElement.classList.toggle('dark', tg.colorScheme === 'dark');
+    const applyScheme = () => {
+      document.documentElement.classList.toggle('dark', tg.colorScheme === 'dark');
+      // Шапка и главная кнопка Telegram — в цвет приложения, а не синие по умолчанию
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      try {
+        tg.setHeaderColor?.('secondary_bg_color');
+        tg.setBackgroundColor?.('secondary_bg_color');
+        tg.MainButton.setParams({ color: accent, text_color: '#ffffff' });
+      } catch {
+        // старый Telegram без этих методов — остаются его цвета
+      }
+    };
     applyScheme();
     tg.onEvent('themeChanged', applyScheme);
   }

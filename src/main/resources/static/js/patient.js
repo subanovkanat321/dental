@@ -1,11 +1,19 @@
 // Самозапись пациента: всё, что видит в Mini App не-врач. Общие кусочки (DOM, запросы,
 // кнопки Telegram) приходят из app.js параметром ui — без циклических импортов.
-import { todayIn, timeOf, toInstant, formatPhone, bookingDays, whenText } from './state.js';
+import { todayIn, timeOf, toInstant, formatPhone, bookingDays, whenText, serviceEmoji } from './state.js';
 
 const STATUS = {
-  REQUESTED: 'Ждёт подтверждения врача — ответ придёт в этот чат',
-  SCHEDULED: 'Подтверждена',
+  REQUESTED: '⏳ Ждёт подтверждения врача — ответ придёт в этот чат',
+  SCHEDULED: '✅ Подтверждена',
 };
+
+const TOOTH = new URL('../img/tooth.svg', import.meta.url).href;
+
+/** Шапка экрана пациента: иллюстрация, заголовок и подзаголовок на бирюзовом фоне. */
+function hero(h, title, subtitle) {
+  return h('div', { class: 'hero' }, h('img', { src: TOOTH, alt: '', width: 72, height: 72 }),
+    h('div', {}, h('h1', {}, title), h('p', {}, subtitle)));
+}
 
 export function startPatient(ui, me) {
   if (!me.bookingEnabled) {
@@ -47,11 +55,12 @@ function bookingScreen(ui, me) {
     },
   }, 'Отменить запись');
   ui.render(h('section', { class: 'screen' },
-    h('h1', {}, 'Ваша запись'),
-    h('p', { class: 'big' }, capitalize(`${whenText(b.startAt)}, в ${timeOf(b.startAt)}`)),
-    h('div', {}, b.serviceName || 'Приём у стоматолога'),
-    h('p', { class: b.status === 'SCHEDULED' ? 'tone-ok' : 'tone-wait' }, STATUS[b.status] || b.status),
-    me.clinicContact ? h('p', { class: 'hint' }, `Вопросы — по телефону клиники: ${me.clinicContact}`) : null,
+    hero(h, 'Ваша запись', 'Ждём вас в клинике 😊'),
+    h('div', { class: 'booking-card' },
+      h('p', { class: 'big' }, '📅 ', capitalize(`${whenText(b.startAt)}, в ${timeOf(b.startAt)}`)),
+      h('div', {}, `${serviceEmoji(b.serviceName || '')} `, b.serviceName || 'Приём у стоматолога'),
+      h('p', {}, h('span', { class: `status ${b.status === 'SCHEDULED' ? 'tone-ok' : 'tone-wait'}` }, STATUS[b.status] || b.status))),
+    me.clinicContact ? h('p', { class: 'hint' }, `📞 Вопросы — по телефону клиники: ${me.clinicContact}`) : null,
     error,
     h('div', { class: 'danger-zone' }, cancel)));
 }
@@ -65,7 +74,7 @@ function bookScreen(ui, me) {
   let chosen = '';
   let seq = 0;
 
-  const serviceBox = h('div', { class: 'field' });
+  const serviceBox = h('div', { class: 'field services' });
   const dayBox = h('div', { class: 'days', role: 'group', 'aria-label': 'День' });
   const grid = h('div', { class: 'slots', role: 'group', 'aria-label': 'Свободное время' });
   const timeError = h('div', { class: 'error', role: 'alert' });
@@ -85,7 +94,11 @@ function bookScreen(ui, me) {
     serviceBox.replaceChildren(h('span', {}, 'Услуга'), ...me.services.map((s) => h('button', {
       type: 'button', class: 'btn', 'aria-pressed': String(service?.id === s.id),
       onclick: () => { service = s; chosen = ''; drawServices(); loadSlots(); },
-    }, `${s.name} · ${s.durationMinutes} мин`)));
+    },
+    h('span', { class: 'ico', 'aria-hidden': 'true' }, serviceEmoji(s.name)),
+    // Для скринридера — «Чистка · 60 мин» одной фразой; на экране длительность отдельной строкой
+    s.name, h('span', { class: 'sr-only' }, ` · ${s.durationMinutes} мин`),
+    h('span', { class: 'dur', 'aria-hidden': 'true' }, `⏱ ${s.durationMinutes} мин`))));
   }
 
   function drawDays() {
@@ -206,7 +219,7 @@ function bookScreen(ui, me) {
   }
 
   ui.render(h('section', { class: 'screen' },
-    h('h1', {}, 'Запись к стоматологу'),
+    hero(h, 'Запись к стоматологу', 'Выберите услугу и удобное время — врач подтвердит запись'),
     serviceBox,
     h('div', { class: 'field' }, h('span', {}, 'День'), dayBox),
     h('div', { class: 'field' }, h('span', {}, 'Время'), timeError, grid),
