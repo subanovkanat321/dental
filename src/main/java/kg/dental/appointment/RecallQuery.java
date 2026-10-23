@@ -24,7 +24,7 @@ class RecallQuery {
 
 	List<RecallView> due(Instant before, Instant now) {
 		return jdbc.sql("""
-				select p.id, p.full_name, p.phone, p.recall_invited_at, max(a.start_at) as last_visit
+				select p.id, p.full_name, p.phone, p.telegram_id, p.recall_invited_at, max(a.start_at) as last_visit
 				from patient p
 				join appointment a on a.patient_id = p.id and a.status = 'DONE'
 				where not exists (
@@ -36,7 +36,8 @@ class RecallQuery {
 			.param("before", Timestamp.from(before))
 			.param("now", Timestamp.from(now))
 			.query((rs, n) -> new RecallView(
-					new PatientView(rs.getLong("id"), rs.getString("full_name"), rs.getString("phone")),
+					new PatientView(rs.getLong("id"), rs.getString("full_name"), rs.getString("phone"),
+							rs.getObject("telegram_id") != null),
 					rs.getTimestamp("last_visit").toInstant(), instant(rs.getTimestamp("recall_invited_at"))))
 			.list();
 	}

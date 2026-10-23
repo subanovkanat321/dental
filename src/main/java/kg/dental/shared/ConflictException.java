@@ -14,6 +14,7 @@ public class ConflictException extends RuntimeException {
 	public static final String INVALID_TRANSITION = "invalid-transition";
 	public static final String DUPLICATE_PATIENT = "duplicate-patient";
 	public static final String ALREADY_WAITING = "already-waiting";
+	public static final String NOT_DELIVERED = "not-delivered";
 
 	private final String code;
 

@@ -19,8 +19,8 @@ import org.springframework.web.client.RestClientResponseException;
  */
 public class TelegramClient {
 
-	/** Только сообщения: остальные типы обновлений боту не нужны. */
-	static final List<String> ALLOWED_UPDATES = List.of("message");
+	/** Сообщения и нажатия кнопок под сообщениями бота; остальные типы обновлений не нужны. */
+	static final List<String> ALLOWED_UPDATES = List.of("message", "callback_query");
 
 	private static final ParameterizedTypeReference<Response<Boolean>> BOOLEAN = new ParameterizedTypeReference<>() {
 	};
@@ -45,17 +45,42 @@ public class TelegramClient {
 		call("sendMessage", new TelegramApi.SendMessage(chatId, text, null), ANY);
 	}
 
-	/** Кнопка под сообщением, которая открывает Mini App по адресу webAppUrl (https). */
-	public record Button(String text, URI webAppUrl) {
+	/**
+	 * Кнопка под сообщением: открывает Mini App по адресу webAppUrl (https) или, если задан
+	 * callbackData, присылает боту нажатие с этими данными (ответ пациента на напоминание).
+	 */
+	public record Button(String text, URI webAppUrl, String callbackData) {
+
+		public Button(String text, URI webAppUrl) {
+			this(text, webAppUrl, null);
+		}
+
+		public static Button callback(String text, String data) {
+			return new Button(text, null, data);
+		}
+
 	}
 
 	/** Сообщение с кнопками под ним — каждая на своей строке. */
 	public void sendMessage(long chatId, String text, List<Button> buttons) {
 		var rows = buttons.stream()
-			.map(b -> List.of(new TelegramApi.InlineButton(b.text(), new TelegramApi.WebAppInfo(b.webAppUrl().toString()))))
+			.map(b -> List.of(new TelegramApi.InlineButton(b.text(),
+					b.webAppUrl() == null ? null : new TelegramApi.WebAppInfo(b.webAppUrl().toString()),
+					b.callbackData())))
 			.toList();
 		call("sendMessage", new TelegramApi.SendMessage(chatId, text, rows.isEmpty() ? null : new TelegramApi.InlineKeyboard(rows)),
 				ANY);
+	}
+
+	/** Ответ на нажатие кнопки: Telegram убирает «часики» и показывает text всплывающей подсказкой. */
+	public void answerCallbackQuery(String callbackQueryId, String text) {
+		call("answerCallbackQuery", new TelegramApi.AnswerCallbackQuery(callbackQueryId, text), BOOLEAN);
+	}
+
+	/** Убрать кнопки под сообщением: на напоминание отвечают один раз. */
+	public void removeButtons(long chatId, long messageId) {
+		call("editMessageReplyMarkup",
+				new TelegramApi.EditMessageReplyMarkup(chatId, messageId, new TelegramApi.InlineKeyboard(List.of())), ANY);
 	}
 
 	/** Кнопка меню чата открывает Mini App по этому адресу (нужен https). */

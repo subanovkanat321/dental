@@ -58,6 +58,7 @@ button { font: inherit; color: inherit; }
 .row .status { grid-column: 2; font-size: .88rem; }
 /* Кнопка WhatsApp справа на обе строки (DD1, DD10: 56×56) */
 .wa { grid-column: 3; grid-row: 1 / span 2; width: 56px; height: 56px; border: 0; border-radius: 50%; background: #25D366; color: #fff; font-weight: 700; cursor: pointer; }
+.wa.tg { background: #2AABEE; }
 .row.struck .name, .row.struck .time { text-decoration: line-through; color: var(--hint); }
 .tone-ok { color: var(--status-ok); }
 .tone-wait { color: var(--status-wait); }
@@ -78,6 +79,7 @@ button { font: inherit; color: inherit; }
 .error { color: var(--destructive); font-size: .88rem; margin: 6px 0; }
 .error:empty { display: none; }
 .btn { display: block; width: 100%; min-height: 56px; margin: 8px 0; padding: 0 16px; border: 0; border-radius: 8px; background: var(--secondary-bg); text-align: left; cursor: pointer; }
+a.btn { display: flex; align-items: center; color: var(--text); text-decoration: none; }
 .btn.primary { background: var(--button); color: var(--button-text); text-align: center; }
 .btn.danger { color: var(--destructive); background: none; }
 .btn[aria-pressed=true] { outline: 2px solid var(--button); }

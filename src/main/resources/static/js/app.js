@@ -218,6 +218,44 @@ function remind(a, onChange) {
   onChange();
 }
 
+/**
+ * «Напомнить в Telegram» — пациенту, который записывался через бота. Сообщение с кнопками
+ * «Приду» / «Нужно перенести» отправляет сервер от имени бота: врач никуда не переходит, а
+ * ответ пациента сам появится в карточке. Отметку «напомнили» сервер ставит только после
+ * доставки, поэтому здесь ждём ответ, а не отмечаем заранее, как у WhatsApp.
+ */
+const sending = new Set(); // id, по которым напоминание в Telegram уже отправляется: двойное нажатие — одно сообщение
+
+async function remindTelegram(a, onChange) {
+  if (sending.has(a.id)) return;
+  sending.add(a.id);
+  pressed.add(a.id);
+  try {
+    Object.assign(a, await api('POST', `/api/appointments/${a.id}/remind-telegram`));
+    haptic('success');
+    toast('Напоминание отправлено в Telegram');
+  } catch (e) {
+    if (fatal(e)) return;
+    pressed.delete(a.id);
+    haptic('error');
+    toast(errorText(e));
+  } finally {
+    sending.delete(a.id);
+  }
+  onChange();
+}
+
+/** Быстрая кнопка в строке и «Напомнить следующему»: записавшимся через бота — в бот, остальным — WhatsApp. */
+function remindBest(a, onChange) {
+  if (a.patient.telegram) remindTelegram(a, onChange);
+  else remind(a, onChange);
+}
+
+/** «Позвонить»: обычная ссылка tel: — телефон откроет звонилку (openLink Telegram понимает только http). */
+function callButton(phone) {
+  return h('a', { class: 'btn', href: `tel:+${phone}` }, 'Позвонить');
+}
+
 // ---------- «День» ----------
 
 async function dayScreen(date, flashId) {
@@ -286,7 +324,7 @@ async function dayScreen(date, flashId) {
     const nextUp = isTomorrow ? nextToRemind(appointments, pressed, now) : null;
     if (nextUp) {
       mainButton.set(`Напомнить следующему (${short(nextUp.patient.fullName)}, ${timeOf(nextUp.startAt)})`,
-        () => remind(nextUp, draw));
+        () => remindBest(nextUp, draw));
     } else {
       mainButton.set('Новая запись', () => newScreen({ date }));
     }
@@ -329,8 +367,10 @@ function row(a, isNext, flash, now, redraw) {
   // ER2: недошедшая отметка — локальное состояние строки, не из базы
   const state = failed ? { label: 'Не сохранено · повторить', icon: '!', tone: 'bad' } : rowState(a, now);
   const classes = ['row', isNext && 'next', flash && 'flash', state.struck && 'struck'].filter(Boolean).join(' ');
+  const viaBot = a.patient.telegram && !failed;
   const wa = canRemind(a, now) ? h('button', {
-    type: 'button', class: 'wa', 'aria-label': `WhatsApp: ${a.patient.fullName}, ${timeOf(a.startAt)}`,
+    type: 'button', class: viaBot ? 'wa tg' : 'wa',
+    'aria-label': `${viaBot ? 'Telegram' : 'WhatsApp'}: ${a.patient.fullName}, ${timeOf(a.startAt)}`,
     onclick: (e) => {
       e.stopPropagation(); // не открывать карточку
       if (failed) {
@@ -340,10 +380,10 @@ function row(a, isNext, flash, now, redraw) {
         a.reminderOpenedAt = a.reminderOpenedAt || new Date().toISOString();
         redraw();
       } else {
-        remind(a, redraw);
+        remindBest(a, redraw);
       }
     },
-  }, failed ? '↻' : 'WA') : null;
+  }, failed ? '↻' : (viaBot ? 'TG' : 'WA')) : null;
   return h('li', {
     class: classes, role: 'listitem', tabindex: 0,
     onclick: () => cardScreen(a),
@@ -361,7 +401,9 @@ function row(a, isNext, flash, now, redraw) {
 const REPLIES = [['CONFIRMED', 'Придёт'], ['RESCHEDULE', 'Перенос'], ['NO_ANSWER', 'Нет ответа']];
 
 function cardScreen(a, notice) {
-  ++screenId;
+  const id = ++screenId;
+  // Ответ сервера после ухода с карточки не должен вернуть врача обратно на неё
+  const refresh = () => id === screenId && cardScreen(a);
   mainButton.hide();
   backButton.set(() => dayScreen(dateOf(a.startAt)));
 
@@ -403,6 +445,7 @@ function cardScreen(a, notice) {
     actions.push(
       button('Подтвердить', () => act('status', { status: 'SCHEDULED' }), 'btn primary'),
       button('Перенести', () => rescheduleScreen(a)),
+      callButton(a.patient.phone),
       h('div', { class: 'danger-zone' },
         button('Отклонить заявку', () => act('status', { status: 'CANCELLED' }), 'btn danger')));
   } else if (a.status === 'SCHEDULED') {
@@ -415,7 +458,12 @@ function cardScreen(a, notice) {
       button('Перенести', () => rescheduleScreen(a)),
     );
     if (canRemind(a)) {
-      actions.unshift(button('Напомнить в WhatsApp', () => remind(a, () => cardScreen(a)), 'btn primary'));
+      // Как связаться — выбирает врач: бот (если пациент записывался через него), WhatsApp или звонок
+      actions.unshift(
+        a.patient.telegram ? button('Напомнить в Telegram', () => remindTelegram(a, refresh), 'btn primary') : null,
+        button('Напомнить в WhatsApp', () => remind(a, refresh), a.patient.telegram ? 'btn' : 'btn primary'),
+        callButton(a.patient.phone),
+      );
     }
     if (canMarkVisit(a)) actions.push(button('Пришёл', () => act('status', { status: 'DONE' }), 'btn primary'));
     // Опасные — отдельной группой внизу, без диалогов, но с «Вернуть» (DD7)
@@ -862,6 +910,7 @@ async function patientScreen(patientId, back) {
     h('button', { type: 'button', class: 'btn primary', onclick: () => newScreen({ date: todayIn(), patient: p }) }, 'Записать снова'),
     // Пустой чат, без готового текста: для любых вопросов
     h('button', { type: 'button', class: 'btn', onclick: () => openLink(`https://wa.me/${p.phone}`) }, 'Написать в WhatsApp'),
+    callButton(p.phone),
     waitlistButton(waitlist.find((e) => e.patient.id === p.id), p, card, self),
     h('button', { type: 'button', class: 'btn', onclick: () => editPatientScreen(p, self) }, 'Изменить имя или телефон'),
     card.upcoming.length ? h('h2', {}, 'Впереди') : null,

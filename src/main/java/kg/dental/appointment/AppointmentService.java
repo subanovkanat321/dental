@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import kg.dental.DentalProperties;
 import kg.dental.patient.PatientService;
@@ -210,6 +211,27 @@ public class AppointmentService {
 		var appointment = require(id, request.version());
 		appointment.changeReply(request.reply());
 		return save(appointment);
+	}
+
+	/** Итог ответа из бота: changed — ответ поменялся (врачу сообщают только тогда). */
+	public record BotReply(AppointmentView appointment, boolean changed) {
+	}
+
+	/**
+	 * Пациент ответил кнопкой под напоминанием в боте. Только на свою запись (тот же Telegram id),
+	 * запланированную и ещё не закончившуюся; иначе — пусто: запись уже перенесли или отменили.
+	 * Без версии, как и отмена пациентом: врач увидит ответ, обновив экран.
+	 */
+	@Transactional
+	public Optional<BotReply> replyFromBot(long id, long telegramId, PatientReply reply) {
+		return appointments.findById(id)
+			.filter(a -> Long.valueOf(telegramId).equals(a.getPatient().getTelegramId()))
+			.filter(a -> a.getStatus() == AppointmentStatus.SCHEDULED && a.getEndAt().isAfter(clock.instant()))
+			.map(a -> {
+				var changed = a.getReply() != reply;
+				a.changeReply(reply);
+				return new BotReply(save(a), changed);
+			});
 	}
 
 	@Transactional

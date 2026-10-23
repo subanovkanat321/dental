@@ -12,6 +12,8 @@ public final class BotTexts {
 
 	static final String BOOK_BUTTON = "Записаться на приём";
 
+	static final String STALE_BUTTON = "Эта запись уже изменилась — откройте приложение";
+
 	static final String CONTACT_SAVED = "Спасибо, номер получен. Вернитесь в приложение и завершите запись.";
 
 	/** Постороннему при включённой самозаписи: как записаться через приложение. */

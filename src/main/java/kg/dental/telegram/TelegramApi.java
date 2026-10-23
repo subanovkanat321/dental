@@ -21,7 +21,13 @@ public final class TelegramApi {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	public record Update(@JsonProperty("update_id") long updateId, Message message) {
+	public record Update(@JsonProperty("update_id") long updateId, Message message,
+			@JsonProperty("callback_query") CallbackQuery callbackQuery) {
+	}
+
+	/** Нажатие кнопки под сообщением бота: data — то, что бот положил в кнопку (до 64 байт). */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	public record CallbackQuery(String id, User from, Message message, String data) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
@@ -48,11 +54,21 @@ public final class TelegramApi {
 			@JsonProperty("reply_markup") InlineKeyboard replyMarkup) {
 	}
 
-	/** Кнопки под сообщением; у нас одна — открыть Mini App. */
+	/** Кнопки под сообщением: открыть Mini App или ответить боту (callback_data). */
 	record InlineKeyboard(@JsonProperty("inline_keyboard") List<List<InlineButton>> rows) {
 	}
 
-	record InlineButton(String text, @JsonProperty("web_app") WebAppInfo webApp) {
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	record InlineButton(String text, @JsonProperty("web_app") WebAppInfo webApp,
+			@JsonProperty("callback_data") String callbackData) {
+	}
+
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	record AnswerCallbackQuery(@JsonProperty("callback_query_id") String callbackQueryId, String text) {
+	}
+
+	record EditMessageReplyMarkup(@JsonProperty("chat_id") long chatId, @JsonProperty("message_id") long messageId,
+			@JsonProperty("reply_markup") InlineKeyboard replyMarkup) {
 	}
 
 	record SetWebhook(String url, @JsonProperty("secret_token") String secretToken,

@@ -69,11 +69,11 @@ class TelegramClientTests {
 	}
 
 	@Test
-	void setWebhookSendsSecretAndOnlyMessageUpdates() {
+	void setWebhookSendsSecretAndOnlyNeededUpdates() {
 		server.expect(requestTo(BASE + "/setWebhook"))
 			.andExpect(content().json("""
 					{"url": "https://dental.test/telegram/webhook", "secret_token": "s3cret",
-					 "allowed_updates": ["message"], "drop_pending_updates": false}"""))
+					 "allowed_updates": ["message", "callback_query"], "drop_pending_updates": false}"""))
 			.andRespond(withSuccess("{\"ok\": true, \"result\": true}", MediaType.APPLICATION_JSON));
 
 		client.setWebhook(URI.create("https://dental.test/telegram/webhook"), "s3cret");
@@ -97,7 +97,7 @@ class TelegramClientTests {
 	@Test
 	void getUpdatesParsesMessagesAndIgnoresUnknownFields() {
 		server.expect(requestTo(BASE + "/getUpdates"))
-			.andExpect(content().json("{\"offset\": 5, \"timeout\": 25, \"allowed_updates\": [\"message\"]}"))
+			.andExpect(content().json("{\"offset\": 5, \"timeout\": 25, \"allowed_updates\": [\"message\", \"callback_query\"]}"))
 			.andRespond(withSuccess("""
 					{"ok": true, "result": [{"update_id": 5, "new_field": 1, "message": {"message_id": 9,
 					 "text": "/start", "from": {"id": 111, "is_bot": false}, "chat": {"id": 111, "type": "private"}}}]}""",

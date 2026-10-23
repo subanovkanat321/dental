@@ -1,10 +1,12 @@
 package kg.dental.telegram;
 
 import java.util.List;
+import java.util.Optional;
 
 import kg.dental.AssetVersion;
 import kg.dental.BookingProperties;
 import kg.dental.patient.PatientService;
+import kg.dental.telegram.TelegramApi.CallbackQuery;
 import kg.dental.telegram.TelegramApi.Update;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,13 +32,16 @@ class BotUpdateHandler {
 
 	private final PatientService patients;
 
+	private final List<BotCallbacks> callbacks;
+
 	BotUpdateHandler(TelegramClient telegram, TelegramProperties properties, AssetVersion version,
-			BookingProperties booking, PatientService patients) {
+			BookingProperties booking, PatientService patients, List<BotCallbacks> callbacks) {
 		this.telegram = telegram;
 		this.properties = properties;
 		this.version = version;
 		this.booking = booking;
 		this.patients = patients;
+		this.callbacks = callbacks;
 	}
 
 	/**
@@ -59,6 +64,10 @@ class BotUpdateHandler {
 	}
 
 	void handle(Update update) {
+		if (update.callbackQuery() != null) {
+			handleCallback(update.callbackQuery());
+			return;
+		}
 		var message = update.message();
 		// Только личный чат: в группе бот мог бы показать расписание чужим людям
 		if (message == null || message.from() == null || message.chat() == null
@@ -84,6 +93,36 @@ class BotUpdateHandler {
 		}
 		if (start) {
 			greet(chatId, update.updateId());
+		}
+	}
+
+	/**
+	 * Нажатие кнопки под сообщением бота (ответ на напоминание). Отвечаем всегда: без
+	 * answerCallbackQuery у человека крутятся «часики» на кнопке. Кнопки после ответа
+	 * убираем — отвечают один раз; новый ответ можно дать врачу по телефону.
+	 */
+	private void handleCallback(CallbackQuery query) {
+		if (query.from() == null || query.data() == null) {
+			return;
+		}
+		var answer = callbacks.stream()
+			.map(c -> c.handle(query.from().id(), query.data()))
+			.flatMap(Optional::stream)
+			.findFirst()
+			.orElse(new BotCallbacks.Answer(BotTexts.STALE_BUTTON, null));
+		telegram.answerCallbackQuery(query.id(), answer.popup());
+		var message = query.message();
+		if (message != null && message.chat() != null && "private".equals(message.chat().type())) {
+			try {
+				telegram.removeButtons(message.chat().id(), message.messageId());
+			}
+			catch (TelegramException e) {
+				// Сообщение старше 48 часов или уже без кнопок — не страшно
+				log.info("Кнопки не убраны: {}", e.getMessage());
+			}
+			if (answer.message() != null) {
+				telegram.sendMessage(message.chat().id(), answer.message());
+			}
 		}
 	}
 
