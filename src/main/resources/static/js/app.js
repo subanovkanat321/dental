@@ -4,7 +4,7 @@ import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
   reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
-  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase, timeOffWhen, priceText, ratingsPhrase, initials, sentText,
+  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase, timeOffWhen, priceText, ratingsPhrase, initials, sentText, somText, PAYMENT_METHODS, periodOf,
 } from './state.js';
 import { startPatient } from './patient.js';
 
@@ -98,6 +98,7 @@ const ICONS = {
   'Фото и профиль': '📷',
   'Записать снова': '➕',
   'Записать на следующий визит': '➕',
+  'Сохранить оплату': '💰',
   'Изменить имя или телефон': '✏️',
   'Поделиться номером': '📱',
   'Отменить запись': '✖️',
@@ -505,6 +506,13 @@ async function dayScreen(date, flashId) {
   render(head, list);
   draw();
   if (flashId) haptic('success');
+  // Выручка за день — своему врачу и админу, за сегодня и прошедшие дни
+  if (canEdit(doctorId) && date <= today && appointments.some((a) => a.status === 'DONE')) {
+    api('GET', `/api/appointments/revenue?from=${date}&to=${date}&doctorId=${doctorId}`).then((r) => {
+      if (id !== screenId || !r.totalSom) return;
+      note.textContent = [note.textContent, `💰 За день: ${somText(r.totalSom)}`].filter(Boolean).join(' · ');
+    }).catch(() => {});
+  }
 }
 
 /** Имя для подписи главной кнопки: она узкая. */
@@ -574,6 +582,86 @@ function row(a, isNext, flash, now, redraw) {
   wa,
   h('span', { class: 'time hint' }, timeOf(a.endAt)),
   h('span', { class: `status tone-${state.tone}` }, `${state.icon} ${state.label}`));
+}
+
+// ---------- Касса ----------
+
+/**
+ * Оплата в карточке состоявшегося приёма: сумма в сомах и способ. Отмечено — строкой
+ * «💰 3 000 сом · наличные» с «Изменить»; не отмечено — сразу поля.
+ */
+function paymentBox(a) {
+  const box = h('div', { class: 'payment' });
+  const methodName = (m) => PAYMENT_METHODS.find(([code]) => code === m)?.[1].toLowerCase() || '';
+  function show() {
+    box.replaceChildren(h('div', { class: 'payment-done' }, h('span', {}, `💰 ${somText(a.paidSom)} · ${methodName(a.paymentMethod)}`),
+      h('button', { type: 'button', class: 'link', onclick: edit }, 'Изменить')));
+  }
+  function edit() {
+    let method = a.paymentMethod || 'CASH';
+    const amount = h('input', { type: 'number', min: 0, step: 100, inputMode: 'numeric', value: a.paidSom ?? '', placeholder: 'Сумма, сом', 'aria-label': 'Сумма, сом' });
+    const methods = h('div', { class: 'segments', role: 'group', 'aria-label': 'Как заплатили' });
+    const error = h('div', { class: 'error', role: 'alert' });
+    const drawMethods = () => methods.replaceChildren(...PAYMENT_METHODS.map(([code, name]) => h('button', {
+      type: 'button', 'aria-pressed': String(method === code), onclick: () => { method = code; drawMethods(); },
+    }, name)));
+    drawMethods();
+    const save = h('button', {
+      type: 'button', class: 'btn primary',
+      onclick: async () => {
+        error.textContent = '';
+        save.disabled = true;
+        try {
+          Object.assign(a, await api('POST', `/api/appointments/${a.id}/payment`,
+            { amountSom: amount.value === '' ? null : Number(amount.value), method }));
+          haptic('success');
+          toast(a.paidSom == null ? 'Отметка оплаты снята' : `✅ Оплата: ${somText(a.paidSom)}`, null, null, 'ok');
+          if (a.paidSom == null) edit(); else show();
+        } catch (e) {
+          save.disabled = false;
+          if (fatal(e)) return;
+          const f = e instanceof ApiError ? e.fields : {};
+          error.textContent = f.amountSom || f.method || errorText(e);
+        }
+      },
+    }, 'Сохранить оплату');
+    box.replaceChildren(h('div', { class: 'field' }, h('span', {}, '💰 Оплата'), amount), methods, error, save);
+    amount.focus();
+  }
+  if (a.paidSom != null) show(); else edit();
+  return box;
+}
+
+/** Выручка врача в «Статистике»: сегодня, неделя, месяц, по способам; отчёт за месяц — в бот. */
+async function revenueCard(doctorId) {
+  const today = todayIn();
+  const month = periodOf(today, 'month');
+  const week = periodOf(today, 'week');
+  const query = (p) => `/api/appointments/revenue?from=${p.from}&to=${p.to}${doctorId ? `&doctorId=${doctorId}` : ''}`;
+  const [d, w, m] = await Promise.all([api('GET', query({ from: today, to: today })), api('GET', query(week)), api('GET', query(month))]);
+  const report = h('button', {
+    type: 'button', class: 'btn',
+    onclick: async () => {
+      report.disabled = true;
+      try {
+        await api('POST', '/api/appointments/report', { month: today.slice(0, 7), doctorId });
+        haptic('success');
+        toast('✅ Отчёт отправлен в чат с ботом — откройте его в Excel', null, null, 'ok');
+      } catch (e) {
+        if (!fatal(e)) toast(`⚠️ ${errorText(e)}`, null, null, 'bad');
+      } finally {
+        report.disabled = false;
+      }
+    },
+  }, h('span', { class: 'ico', 'aria-hidden': 'true' }, '📤'), 'Отчёт за месяц для Excel — в бот');
+  return h('div', { class: 'stat revenue' },
+    h('strong', {}, doctorId ? '💰 Выручка' : '💰 Выручка кабинета'),
+    h('div', { class: 'revenue-grid' },
+      [['Сегодня', d], ['Неделя', w], ['Месяц', m]].map(([label, r]) => h('div', {},
+        h('span', { class: 'hint' }, label), h('b', {}, somText(r.totalSom))))),
+    h('div', { class: 'hint' }, PAYMENT_METHODS.map(([code, name]) => `${name.toLowerCase()} ${somText(m.byMethod[code])}`).join(' · ')),
+    m.unpaidCount ? h('div', { class: 'tone-wait' }, `Без отметки оплаты за месяц: ${m.unpaidCount}`) : null,
+    report);
 }
 
 // ---------- Карточка приёма ----------
@@ -661,6 +749,7 @@ function cardScreen(a, notice) {
     actions.push(h('p', { class: 'hint' }, 'Восстановленный приём попросит напомнить пациенту заново.'),
       button('Восстановить', () => act('status', { status: 'SCHEDULED' }), 'btn primary'));
   } else if (a.status === 'DONE') {
+    actions.push(paymentBox(a));
     // Лечение часто в несколько визитов: сразу записать на следующий — через неделю, тот же пациент и длительность
     actions.push(button('Записать на следующий визит', () => newScreen({
       date: addDays(dateOf(a.startAt) > todayIn() ? dateOf(a.startAt) : todayIn(), 7),
@@ -1482,6 +1571,17 @@ async function statsScreen(back) {
     return;
   }
   if (id !== screenId) return;
+  // Деньги — свои (врач) или любые (админ): у коллеги выручку не показываем
+  let money = null;
+  if (canEdit(team.current)) {
+    try {
+      money = await revenueCard(team.current);
+      if (team.admin && team.doctors.length > 1) money = [money, await revenueCard(null)];
+    } catch (e) {
+      if (fatal(e)) return;
+    }
+  }
+  if (id !== screenId) return;
   const average = averageNoShows(weeks);
   const unmarked = weeks.reduce((sum, w) => sum + w.unmarked, 0);
   const week = (w, i) => {
@@ -1496,6 +1596,7 @@ async function statsScreen(back) {
       ]);
   };
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Статистика'),
+    money,
     ratingsCard(ratings),
     h('p', {}, average === null ? 'Через неделю здесь будет среднее неявок в неделю.'
       : `В среднем ${noShowsPhrase(average)} в неделю. До приложения было 2–3.`),

@@ -391,3 +391,14 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 .hours-row input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
 .hours-row input[type=time] { min-height: 38px; padding: 4px 6px; font: inherit; color: var(--text); background: var(--page); border: 1px solid var(--separator); border-radius: 8px; }
 .hours-row input:disabled { opacity: .45; }
+
+/* Касса */
+.payment { margin: 10px 0; padding: 12px 14px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); }
+.payment .field { margin: 0 0 8px; }
+.payment .segments { margin: 0 0 8px; }
+.payment .btn { margin: 8px 0 0; }
+.payment-done { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 1.05rem; }
+.revenue-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.revenue-grid > div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 12px; background: var(--page); }
+.revenue-grid b { font-size: 1.05rem; }
+.revenue .btn { margin-bottom: 0; }

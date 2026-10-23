@@ -53,6 +53,17 @@ public class Staff {
 		throw new ForbiddenException("Это расписание коллеги — менять его может сам врач или администратор");
 	}
 
+	/** Деньги (выручка, отчёт) — свои (врач) или любого врача (админ); весь кабинет (null) — админ. */
+	public void requireMoneyAccess(long telegramId, Long doctorId) {
+		if (doctorId == null) {
+			if (!isAdmin(telegramId)) {
+				throw new ForbiddenException("Выручку всего кабинета видит администратор");
+			}
+			return;
+		}
+		requireCanEdit(telegramId, doctorId);
+	}
+
 	/** Все сотрудники — кнопка «Открыть день» при старте приложения. */
 	public Set<Long> allTelegramIds() {
 		var ids = new LinkedHashSet<>(properties.allowedIds());

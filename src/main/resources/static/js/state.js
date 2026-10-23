@@ -339,3 +339,22 @@ export function sentText(instant, now = new Date()) {
       .format(new Date(`${day}T00:00:00Z`)).replace('.', '');
   return `${when} в ${timeOf(instant)}`;
 }
+
+/** «3 000 сом» — деньги в API целые сомы. */
+export function somText(som) {
+  return `${new Intl.NumberFormat('ru-RU').format(som)} сом`;
+}
+
+export const PAYMENT_METHODS = [['CASH', 'Наличные'], ['TRANSFER', 'Перевод'], ['CARD', 'Карта']];
+
+/** Первый и последний день месяца и недели (пн–вс) по дате 'YYYY-MM-DD' — для выручки. */
+export function periodOf(date, kind) {
+  if (kind === 'month') {
+    const [y, m] = date.split('-').map(Number);
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return { from: `${date.slice(0, 7)}-01`, to: `${date.slice(0, 7)}-${String(last).padStart(2, '0')}` };
+  }
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay() || 7;
+  const from = addDays(date, 1 - weekday);
+  return { from, to: addDays(from, 6) };
+}

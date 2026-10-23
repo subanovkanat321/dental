@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  rowState, serviceEmoji, stripDays, recordsPhrase, breakNote, timeOffWhen, priceText, ratingsPhrase, initials, sentText, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
+  rowState, serviceEmoji, stripDays, recordsPhrase, breakNote, timeOffWhen, priceText, ratingsPhrase, initials, sentText, periodOf, somText, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
   dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, bookingDays, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
@@ -247,4 +247,12 @@ test('sentText: сегодня, вчера, дата — по Бишкеку', (
   assert.equal(sentText('2026-10-23T12:05:00Z', now), 'сегодня в 18:05');
   assert.equal(sentText('2026-10-22T12:05:00Z', now), 'вчера в 18:05');
   assert.equal(sentText('2026-10-20T04:00:00Z', now), '20 окт в 10:00');
+});
+
+test('periodOf: месяц и неделя (пн–вс); somText', () => {
+  assert.deepEqual(periodOf('2026-10-23', 'month'), { from: '2026-10-01', to: '2026-10-31' });
+  assert.deepEqual(periodOf('2026-02-10', 'month'), { from: '2026-02-01', to: '2026-02-28' });
+  assert.deepEqual(periodOf('2026-10-23', 'week'), { from: '2026-10-19', to: '2026-10-25' }); // пятница
+  assert.deepEqual(periodOf('2026-10-25', 'week'), { from: '2026-10-19', to: '2026-10-25' }); // воскресенье
+  assert.equal(somText(12500).replace(/\s/g, ' '), '12 500 сом');
 });

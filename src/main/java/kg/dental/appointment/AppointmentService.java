@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -17,6 +18,7 @@ import kg.dental.doctor.DoctorService;
 import kg.dental.patient.PatientService;
 import kg.dental.patient.PatientView;
 import kg.dental.shared.ConflictException;
+import kg.dental.shared.InvalidFieldException;
 import kg.dental.shared.NotFoundException;
 import kg.dental.patient.Patient;
 import kg.dental.servicetype.ServiceType;
@@ -52,9 +54,12 @@ public class AppointmentService {
 
 	private final DoctorService doctors;
 
+	private final PaymentQuery payments;
+
 	AppointmentService(AppointmentRepository appointments, PatientService patients, Clock clock,
 			DentalProperties properties, AppointmentStatsQuery stats, RecallQuery recall, PreNoticeQuery preNotices,
-			ApplicationEventPublisher events, ReviewQuery reviews, DoctorService doctors) {
+			ApplicationEventPublisher events, ReviewQuery reviews, DoctorService doctors, PaymentQuery payments) {
+		this.payments = payments;
 		this.doctors = doctors;
 		this.reviews = reviews;
 		this.appointments = appointments;
@@ -99,6 +104,63 @@ public class AppointmentService {
 	@Transactional
 	public List<PreNotice> claimPreNotices(Instant now, Duration lead) {
 		return preNotices.claim(now, now.plus(lead));
+	}
+
+	/**
+	 * Оплата у состоявшегося приёма: сумма в целых сомах и способ; сумма null — снять отметку.
+	 * Без версии: правка суммы не мешает другим действиям в карточке.
+	 */
+	@Transactional
+	public AppointmentView setPayment(long id, Integer amountSom, PaymentMethod method) {
+		if (amountSom != null && (amountSom < 0 || amountSom > 10_000_000)) {
+			throw new InvalidFieldException("amountSom", "Сумма — целое число сомов, до 10 000 000");
+		}
+		if (amountSom != null && method == null) {
+			throw new InvalidFieldException("method", "Выберите, как заплатили");
+		}
+		if (payments.set(id, amountSom, amountSom == null ? null : method, clock.instant()) == 0) {
+			require(id);
+			throw new ConflictException(ConflictException.INVALID_TRANSITION, "Оплату отмечают у состоявшегося приёма");
+		}
+		return get(id);
+	}
+
+	/** @param doctorId чья выручка; null — всего кабинета */
+	@Transactional(readOnly = true)
+	public RevenueView revenue(LocalDate from, LocalDate to, Long doctorId) {
+		return payments.revenue(from, to, properties.timeZone(), doctorId);
+	}
+
+	/**
+	 * Отчёт для Excel: CSV с «;» и BOM — так русский Excel открывает его сам, без мастера импорта.
+	 * Без имён и телефонов пациентов: бухгалтерии они не нужны, а файл уходит в Telegram.
+	 */
+	@Transactional(readOnly = true)
+	public String exportCsv(LocalDate from, LocalDate to, Long doctorId) {
+		var zone = properties.timeZone();
+		var date = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+		var time = DateTimeFormatter.ofPattern("HH:mm");
+		var csv = new StringBuilder("\uFEFFНомер;Дата;Время;Врач;Услуга;Статус;Сумма, сом;Оплата\r\n");
+		for (var r : payments.export(from, to, zone, doctorId)) {
+			var at = r.startAt().atZone(zone);
+			csv.append(r.id()).append(';').append(date.format(at)).append(';').append(time.format(at)).append(';')
+				.append(cell(r.doctor())).append(';').append(cell(r.service() == null ? "" : r.service())).append(';')
+				.append(STATUS_TEXT.getOrDefault(r.status(), r.status())).append(';')
+				.append(r.paidSom() == null ? "" : r.paidSom()).append(';')
+				.append(r.method() == null ? "" : METHOD_TEXT.get(r.method())).append("\r\n");
+		}
+		return csv.toString();
+	}
+
+	private static final Map<String, String> STATUS_TEXT = Map.of("SCHEDULED", "Запланирован", "DONE", "Состоялся",
+			"NO_SHOW", "Неявка", "CANCELLED", "Отменён");
+
+	private static final Map<String, String> METHOD_TEXT = Map.of("CASH", "Наличные", "TRANSFER", "Перевод", "CARD",
+			"Карта");
+
+	/** Ячейка CSV: «;», кавычки и перевод строки — в кавычках, как требует формат. */
+	private static String cell(String text) {
+		return text.matches(".*[;\"\r\n].*") ? "\"" + text.replace("\"", "\"\"") + "\"" : text;
 	}
 
 	/** Кого спросить об оценке: пришли в этот день (по Бишкеку), записывались через бота. Помечает «спросили». */

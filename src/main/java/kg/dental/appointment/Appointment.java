@@ -60,6 +60,14 @@ public class Appointment {
 	@Column(insertable = false, updatable = false)
 	private Short rating;
 
+	/** Оплата (V14), целые сомы. Ставит только PaymentQuery: JPA её не пишет и не затирает. */
+	@Column(insertable = false, updatable = false)
+	private Integer paidSom;
+
+	@Enumerated(EnumType.STRING)
+	@Column(insertable = false, updatable = false)
+	private PaymentMethod paymentMethod;
+
 	/**
 	 * Оптимистическая блокировка (D18). Hibernate добавляет к UPDATE условие
 	 * {@code where version = ?} и увеличивает номер; если строку уже изменили, обновится
@@ -230,6 +238,14 @@ public class Appointment {
 
 	public Long getDoctorId() {
 		return doctorId;
+	}
+
+	public Integer getPaidSom() {
+		return paidSom;
+	}
+
+	public PaymentMethod getPaymentMethod() {
+		return paymentMethod;
 	}
 
 	public Short getRating() {

@@ -6,6 +6,7 @@ import java.util.List;
 import jakarta.validation.Valid;
 import kg.dental.auth.InitDataAuthFilter;
 import kg.dental.doctor.Staff;
+import kg.dental.shared.InvalidFieldException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,6 +54,33 @@ class AppointmentController {
 	List<DayCount> counts(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
 			@RequestParam(defaultValue = "21") int days, @RequestParam long doctorId) {
 		return service.dayCounts(from, Math.clamp(days, 1, 62), doctorId);
+	}
+
+	record Payment(Integer amountSom, PaymentMethod method) {
+	}
+
+	/** Оплата у состоявшегося приёма — своего (врач) или любого (админ). */
+	@PostMapping("/{id}/payment")
+	AppointmentView payment(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @PathVariable long id,
+			@RequestBody Payment request) {
+		requireOwn(me, id);
+		return service.setPayment(id, request.amountSom(), request.method());
+	}
+
+	/**
+	 * {@code /api/appointments/revenue?from=2026-10-01&to=2026-10-31&doctorId=1}: выручка. Врач видит
+	 * свою, админ — любого врача и всего кабинета (без doctorId).
+	 */
+	@GetMapping("/revenue")
+	RevenueView revenue(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+			@RequestParam(required = false) Long doctorId) {
+		staff.requireMoneyAccess(me, doctorId);
+		if (to.isBefore(from) || from.plusDays(366).isBefore(to)) {
+			throw new InvalidFieldException("to", "Период — до года");
+		}
+		return service.revenue(from, to, doctorId);
 	}
 
 	/** {@code /api/appointments/ratings?days=90}: оценки пациентов — в «Статистику». */

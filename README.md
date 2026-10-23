@@ -111,6 +111,14 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 - Пациенты, услуги и рабочие часы (`WORK_HOURS`, `WORK_DAYS`) — общие на кабинет.
 - После обновления до V11 все прежние приёмы — у врача №1 (имя и фото — из прежнего профиля).
 
+## Касса
+
+V14: у состоявшегося приёма — оплата в целых сомах и способ (наличные / перевод / карта);
+ставится прямым UPDATE без `@Version`. В карточке — «💰 Оплата», в «Дне» — «💰 За день»,
+в «Статистике» — выручка за сегодня, неделю, месяц и по способам, сколько приёмов без отметки.
+Свою выручку видит врач, любого врача и весь кабинет — админ. «📤 Отчёт за месяц для Excel» —
+CSV (`;`, BOM) приходит в чат с ботом; без имён и телефонов пациентов.
+
 ## Адрес и техподдержка
 
 «Меню → О клинике» (админ, V12 `clinic_settings`): адрес, ссылка 2ГИС (сервер принимает только
@@ -194,6 +202,9 @@ https-ссылки 2gis.kg / 2gis.ru / 2gis.com / go.2gis.com), Telegram и те
 | `GET /api/doctors`; `GET /api/doctors/admin`, `POST /api/doctors`, `PUT /api/doctors/{id}` | врачи; заводит и привязывает Telegram только админ |
 | `PUT /api/doctors/{id}/profile`, `POST/DELETE /api/doctors/{id}/photo` | профиль и фото — сам врач или админ |
 | `GET /doctors/{id}/photo?v=N` | фото врача, без входа, кэш на год (адрес меняется с фото) |
+| `POST /api/appointments/{id}/payment` `{amountSom, method}` | оплата у состоявшегося приёма (null — снять) |
+| `GET /api/appointments/revenue?from=&to=&doctorId=` | выручка: всего, по способам, по дням, без отметки |
+| `POST /api/appointments/report` `{month, doctorId}` | CSV-отчёт за месяц — в чат с ботом |
 | `GET /api/clinic`, `PUT /api/clinic` | адрес, ссылка 2ГИС, техподдержка; менять — только админ |
 | `GET /api/slots?date=&doctorId=&duration=&exclude=` | свободные окна дня и сетка начал (шаг 15 мин) в рабочих часах |
 | `GET /api/settings` | подпись клиники для текста напоминания |

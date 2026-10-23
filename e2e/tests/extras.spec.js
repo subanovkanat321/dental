@@ -89,3 +89,21 @@ test('оценки: в карточке приёма и в «Статистик�
   await expect(page.locator('.ratings-avg')).toHaveText('⭐ 4,5');
   await expect(page.locator('.ratings')).toContainText('2 оценки за 90 дней');
 });
+
+test('касса: оплата в карточке → выручка в «Статистике» и за день', async ({ page }) => {
+  const id = await addAppointment(await addPatient('Айгуль'), today(), '09:00', { status: 'DONE' });
+  await openApp(page, { path: `/?appointment=${id}` });
+
+  await page.getByLabel('Сумма, сом').fill('3000');
+  await page.getByRole('group', { name: 'Как заплатили' }).getByRole('button', { name: 'Перевод' }).click();
+  await page.getByRole('button', { name: 'Сохранить оплату' }).click();
+  await expect(page.locator('.payment-done')).toContainText(/3\s000 сом · перевод/);
+  const { rows } = await db.query('select paid_som, payment_method from appointment where id = $1', [id]);
+  expect(rows[0]).toEqual({ paid_som: 3000, payment_method: 'TRANSFER' });
+
+  await openApp(page);
+  await expect(page.locator('.day-note')).toContainText(/За день: 3\s000 сом/);
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Статистика неявок' }).click();
+  await expect(page.locator('.revenue').first()).toContainText(/Сегодня\s*3\s000 сом/);
+});

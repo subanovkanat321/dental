@@ -7,7 +7,9 @@ import java.util.Map;
 import kg.dental.telegram.TelegramApi.Response;
 import kg.dental.telegram.TelegramApi.Update;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -84,6 +86,20 @@ public class TelegramClient {
 				keyboard.isEmpty() ? null : new TelegramApi.InlineKeyboard(keyboard)), ANY);
 	}
 
+	/** Файл в чат (отчёт для Excel): multipart, как требует Bot API для загрузки документа. */
+	public void sendDocument(long chatId, String fileName, byte[] content, String caption) {
+		var form = new LinkedMultiValueMap<String, Object>();
+		form.add("chat_id", String.valueOf(chatId));
+		form.add("caption", caption);
+		form.add("document", new ByteArrayResource(content) {
+			@Override
+			public String getFilename() {
+				return fileName;
+			}
+		});
+		call("sendDocument", form, MediaType.MULTIPART_FORM_DATA, ANY);
+	}
+
 	/** Меню «/» в чате с ботом: что умеет бот. */
 	public void setMyCommands(Map<String, String> commands) {
 		call("setMyCommands", new TelegramApi.SetMyCommands(commands.entrySet().stream()
@@ -126,12 +142,16 @@ public class TelegramClient {
 	}
 
 	private <T> T call(String method, Object body, ParameterizedTypeReference<Response<T>> type) {
+		return call(method, body, MediaType.APPLICATION_JSON, type);
+	}
+
+	private <T> T call(String method, Object body, MediaType contentType, ParameterizedTypeReference<Response<T>> type) {
 		Response<T> response;
 		try {
 			response = http.post()
 				// Строкой, а не шаблоном {token}: шаблон закодировал бы «:» токена в %3A
 				.uri("/bot" + token + "/" + method)
-				.contentType(MediaType.APPLICATION_JSON)
+				.contentType(contentType)
 				.body(body)
 				.retrieve()
 				.body(type);
