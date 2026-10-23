@@ -383,3 +383,5 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
   display: block; width: 100%; margin: 8px 0; padding: 12px 14px; border: 0; border-radius: 14px; text-align: left;
   background: color-mix(in srgb, var(--status-wait) 16%, var(--card)); color: var(--text); font-weight: 600; cursor: pointer;
 }
+.readonly-note { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--card); color: var(--hint); font-size: .88rem; box-shadow: var(--shadow); }
+.row.free.readonly { cursor: default; opacity: .7; }

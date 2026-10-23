@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.List;
 
 import jakarta.validation.Valid;
+import kg.dental.auth.InitDataAuthFilter;
+import kg.dental.doctor.Staff;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -34,8 +37,11 @@ class WaitlistController {
 
 	private final WaitlistService service;
 
-	WaitlistController(WaitlistService service) {
+	private final Staff staff;
+
+	WaitlistController(WaitlistService service, Staff staff) {
 		this.service = service;
+		this.staff = staff;
 	}
 
 	@GetMapping
@@ -57,7 +63,10 @@ class WaitlistController {
 
 	/** Записать (или перенести, если уже записан) в освободившееся окно и убрать из листа. */
 	@PostMapping("/{id}/book")
-	AppointmentView book(@PathVariable long id, @Valid @RequestBody Book request) {
+	AppointmentView book(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @PathVariable long id,
+			@Valid @RequestBody Book request) {
+		// Записать из листа ожидания — в своё расписание (или любое — админ)
+		staff.requireCanEdit(me, request.doctorId());
 		return service.book(id, request.doctorId(), request.startAt());
 	}
 

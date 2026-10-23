@@ -4,6 +4,7 @@ import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
 
+import kg.dental.shared.ForbiddenException;
 import kg.dental.telegram.TelegramProperties;
 import org.springframework.stereotype.Component;
 
@@ -35,6 +36,21 @@ public class Staff {
 	/** Врач, которым этот человек работает; админ без своего кресла — пусто. */
 	public Optional<Long> doctorIdOf(long telegramId) {
 		return doctors.doctorIdOf(telegramId);
+	}
+
+	/**
+	 * Менять расписание врача (записать, перенести, отменить, отметить, напомнить) может сам
+	 * этот врач или админ. Коллега видит чужой «День», но не правит его: случайное нажатие
+	 * в чужом расписании испортило бы приём и статистику неявок.
+	 */
+	public void requireCanEdit(long telegramId, long doctorId) {
+		if (isAdmin(telegramId)) {
+			return;
+		}
+		if (doctors.doctorIdOf(telegramId).map(id -> id == doctorId).orElse(false)) {
+			return;
+		}
+		throw new ForbiddenException("Это расписание коллеги — менять его может сам врач или администратор");
 	}
 
 	/** Все сотрудники — кнопка «Открыть день» при старте приложения. */

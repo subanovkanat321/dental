@@ -2,7 +2,7 @@
 import { test } from '@playwright/test';
 import {
   expect, openApp, resetDb, addPatient, addAppointment, addDoctor, tomorrow, db, saveContact, signInitData, STRANGER,
-  pressMainButton, slot,
+  pressMainButton, slot, mainButtonText,
 } from './helpers.js';
 
 test.beforeEach(resetDb);
@@ -82,4 +82,26 @@ test('врач со своим Telegram входит и видит свой «Д
   await page.getByRole('button', { name: 'Меню' }).click();
   await expect(page.getByRole('button', { name: 'Врачи' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Мой профиль' })).toBeVisible();
+});
+
+test('врач видит «День» коллеги, но не меняет его', async ({ page }) => {
+  const second = await addDoctor('Айгерим Садыкова', 222);
+  const colleagues = await addAppointment(await addPatient('Пациент коллеги'), tomorrow(), '10:00');
+  await addAppointment(await addPatient('Мой пациент'), tomorrow(), '11:00', { doctor: second });
+  await openApp(page, { path: '/?day=tomorrow', initData: signInitData(222) });
+  await expect(page.getByText('Мой пациент')).toBeVisible();
+  expect(await mainButtonText(page)).not.toBeNull();
+
+  await page.getByRole('group', { name: 'Врач' }).getByRole('button', { name: /^Врач$/ }).click();
+  await expect(page.getByText('👀 Расписание коллеги — только просмотр')).toBeVisible();
+  await expect(page.getByText('Пациент коллеги')).toBeVisible();
+  await expect(page.getByRole('button', { name: /WhatsApp: Пациент коллеги/ })).toHaveCount(0);
+  expect(await mainButtonText(page)).toBeNull(); // главной кнопки «Новая запись» нет
+
+  await page.getByText('Пациент коллеги').click();
+  await expect(page.getByText(/Это приём коллеги/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Перенести' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Отменить приём' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Позвонить' })).toBeVisible();
+  expect((await db.query('select status from appointment where id = $1', [colleagues])).rows[0].status).toBe('SCHEDULED');
 });

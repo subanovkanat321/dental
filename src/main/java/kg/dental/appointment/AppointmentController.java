@@ -4,11 +4,14 @@ import java.time.LocalDate;
 import java.util.List;
 
 import jakarta.validation.Valid;
+import kg.dental.auth.InitDataAuthFilter;
+import kg.dental.doctor.Staff;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,8 +29,16 @@ class AppointmentController {
 
 	private final AppointmentService service;
 
-	AppointmentController(AppointmentService service) {
+	private final Staff staff;
+
+	AppointmentController(AppointmentService service, Staff staff) {
 		this.service = service;
+		this.staff = staff;
+	}
+
+	/** Приём коллеги — только смотреть (Staff.requireCanEdit). */
+	private void requireOwn(long me, long appointmentId) {
+		staff.requireCanEdit(me, service.get(appointmentId).doctorId());
 	}
 
 	/** {@code ?date=2027-06-01&doctorId=1} — день врача по Бишкеку. */
@@ -75,34 +86,43 @@ class AppointmentController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	AppointmentView create(@Valid @RequestBody AppointmentRequests.Create request) {
+	AppointmentView create(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @Valid @RequestBody AppointmentRequests.Create request) {
+		staff.requireCanEdit(me, request.doctorId());
 		return service.create(request);
 	}
 
 	@PostMapping("/{id}/reschedule")
-	AppointmentView reschedule(@PathVariable long id, @Valid @RequestBody AppointmentRequests.Reschedule request) {
+	AppointmentView reschedule(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @PathVariable long id,
+			@Valid @RequestBody AppointmentRequests.Reschedule request) {
+		requireOwn(me, id);
 		return service.reschedule(id, request);
 	}
 
 	@PostMapping("/{id}/status")
-	AppointmentView changeStatus(@PathVariable long id, @Valid @RequestBody AppointmentRequests.ChangeStatus request) {
+	AppointmentView changeStatus(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @PathVariable long id,
+			@Valid @RequestBody AppointmentRequests.ChangeStatus request) {
+		requireOwn(me, id);
 		return service.changeStatus(id, request);
 	}
 
 	@PostMapping("/{id}/reply")
-	AppointmentView changeReply(@PathVariable long id, @Valid @RequestBody AppointmentRequests.ChangeReply request) {
+	AppointmentView changeReply(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @PathVariable long id,
+			@Valid @RequestBody AppointmentRequests.ChangeReply request) {
+		requireOwn(me, id);
 		return service.changeReply(id, request);
 	}
 
 	@PostMapping("/{id}/undo")
-	AppointmentView undo(@PathVariable long id, @Valid @RequestBody AppointmentRequests.Undo request) {
+	AppointmentView undo(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @PathVariable long id, @Valid @RequestBody AppointmentRequests.Undo request) {
+		requireOwn(me, id);
 		return service.undo(id, request);
 	}
 
 	/** Кнопка WhatsApp: шлётся с keepalive до перехода в WhatsApp, ответ не нужен. */
 	@PostMapping("/{id}/reminder-opened")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	void reminderOpened(@PathVariable long id) {
+	void reminderOpened(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @PathVariable long id) {
+		requireOwn(me, id);
 		service.markReminderOpened(id);
 	}
 

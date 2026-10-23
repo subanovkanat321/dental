@@ -25,6 +25,11 @@ function doctorById(id) {
   return team.doctors.find((d) => d.id === id);
 }
 
+/** Менять расписание врача может он сам или админ; коллега — только смотрит (проверяет и сервер). */
+function canEdit(doctorId) {
+  return team.admin || doctorId === team.mine;
+}
+
 /** Кружок врача: фото или инициалы. */
 function avatar(d, size = 28) {
   return d?.photoUrl
@@ -379,7 +384,8 @@ async function dayScreen(date, flashId) {
   const doctorId = team.current;
   hideToast();
   backButton.hide();
-  mainButton.set('Новая запись', () => newScreen({ date }));
+  if (canEdit(doctorId)) mainButton.set('Новая запись', () => newScreen({ date }));
+  else mainButton.hide();
 
   const today = todayIn();
   const dateInput = h('input', {
@@ -403,6 +409,7 @@ async function dayScreen(date, flashId) {
     }, avatar(d, 24), h('span', {}, d.id === team.mine ? `${shortName(d.fullName)} (я)` : shortName(d.fullName))))) : null;
   const head = h('header', { class: 'day-head' },
     doctorSwitch,
+    canEdit(doctorId) ? null : h('div', { class: 'readonly-note' }, '👀 Расписание коллеги — только просмотр'),
     h('div', { class: 'day-title' },
       h('button', { type: 'button', class: 'arrow', 'aria-label': 'Предыдущий день', onclick: () => dayScreen(addDays(date, -1)) }, '‹'),
       h('label', {}, h('h1', {}, dayTitle(date)), dateInput),
@@ -471,8 +478,10 @@ async function dayScreen(date, flashId) {
     flash = null;
 
     // Вечерний обход (DD6): на «Завтра» главная кнопка ведёт к следующему, кому не напомнили
-    const nextUp = isTomorrow ? nextToRemind(appointments, pressed, now) : null;
-    if (nextUp) {
+    const nextUp = isTomorrow && canEdit(doctorId) ? nextToRemind(appointments, pressed, now) : null;
+    if (!canEdit(doctorId)) {
+      mainButton.hide();
+    } else if (nextUp) {
       mainButton.set(`Напомнить следующему (${short(nextUp.patient.fullName)}, ${timeOf(nextUp.startAt)})`,
         () => {
           // Telegram — запрос к серверу: главная кнопка с «часиками», пока он идёт
@@ -514,6 +523,11 @@ function pauseRow(p) {
 }
 
 function freeRow(date, slot, waitlist = [], doctorId = team.current) {
+  if (!canEdit(doctorId)) {
+    // Чужое расписание: окно видно, но записать в него может только сам врач
+    return h('li', { class: 'row free readonly', role: 'listitem' },
+      h('span', { class: 'time' }, timeOf(slot.startAt)), h('span', { class: 'hint' }, `свободно до ${timeOf(slot.endAt)}`));
+  }
   const candidates = waitlist.filter((entry) => fitsWindow(entry, slot, doctorId));
   const open = () => newScreen({ date, time: timeOf(slot.startAt), duration: windowDuration(slot), candidates });
   return h('li', {
@@ -532,7 +546,7 @@ function row(a, isNext, flash, now, redraw) {
   const state = failed ? { label: 'Не сохранено · повторить', icon: '⚠️', tone: 'bad' } : rowState(a, now);
   const classes = ['row', isNext && 'next', flash && 'flash', state.struck && 'struck'].filter(Boolean).join(' ');
   const viaBot = a.patient.telegram && !failed;
-  const wa = canRemind(a, now) ? h('button', {
+  const wa = canRemind(a, now) && canEdit(a.doctorId) ? h('button', {
     type: 'button', class: viaBot ? 'wa tg' : 'wa',
     'aria-label': `${viaBot ? 'Telegram' : 'WhatsApp'}: ${a.patient.fullName}, ${timeOf(a.startAt)}`,
     onclick: (e) => {
@@ -606,7 +620,12 @@ function cardScreen(a, notice) {
   const undoable = (label) => (updated) => toast(label, 'Вернуть', () => undo(updated, a.status));
 
   const actions = [];
-  if (a.status === 'REQUESTED') {
+  if (!canEdit(a.doctorId)) {
+    // Приём коллеги: только посмотреть и при необходимости позвонить пациенту
+    actions.push(h('p', { class: 'readonly-note' },
+      `👀 Это приём коллеги — менять его может ${doctorById(a.doctorId)?.fullName || 'его врач'} или администратор.`),
+    callButton(a.patient.phone));
+  } else if (a.status === 'REQUESTED') {
     // Заявка пациента из бота: ответ уйдёт пациенту в бот сам (RequestDecided)
     actions.push(
       button('Подтвердить', () => act('status', { status: 'SCHEDULED' }), 'btn primary'),
@@ -1143,7 +1162,7 @@ async function timeOffScreen(back) {
       h('span', { class: 'timeoff-emoji', 'aria-hidden': 'true' }, t.emoji),
       h('div', { class: 'timeoff-text' }, h('div', { class: 'timeoff-title' }, t.title), h('div', { class: 'hint' }, timeOffWhen(t)),
         team.doctors.length > 1 ? h('div', { class: 'hint' }, t.doctorId ? `🧑‍⚕️ ${doctorById(t.doctorId)?.fullName || 'врач скрыт'}` : '👥 Все врачи') : null),
-      h('button', {
+      !team.admin && t.doctorId !== team.mine ? null : h('button', {
         type: 'button', class: 'link danger-link', 'aria-label': `Удалить: ${t.title}`,
         onclick: async () => {
           try {
@@ -1169,7 +1188,8 @@ function timeOffEditScreen(back) {
   let weekly = true;
   let weekday = 'FRIDAY';
   // Для кого: по умолчанию — для своего кресла; null — у всех (общий выходной, джума-намаз)
-  let forDoctor = team.doctors.length > 1 ? (team.mine ?? team.current) : null;
+  // Врач — только себе; админ выбирает (null — у всех врачей)
+  let forDoctor = !team.admin ? team.mine : team.doctors.length > 1 ? (team.mine ?? team.current) : null;
   const whoBox = h('div', { class: 'weekdays', role: 'group', 'aria-label': 'Для кого' });
   let emoji = TIME_OFF_EMOJI[0];
   const title = h('input', { type: 'text', maxLength: 60, placeholder: 'Например: Обед' });
@@ -1209,7 +1229,7 @@ function timeOffEditScreen(back) {
   firstDay.addEventListener('change', () => { if (lastDay.value < firstDay.value) lastDay.value = firstDay.value; });
 
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Новый перерыв'),
-    team.doctors.length > 1 ? h('div', { class: 'field' }, h('span', {}, 'Для кого'), whoBox) : null,
+    team.admin && team.doctors.length > 1 ? h('div', { class: 'field' }, h('span', {}, 'Для кого'), whoBox) : null,
     kindBox, whenBox,
     h('label', { class: 'consent', for: 'whole-day' }, wholeDay, ' Весь день (выходной, отпуск)'),
     timeBox,
@@ -1600,7 +1620,7 @@ function editPatientScreen(p, back) {
 
 // ---------- Новая запись ----------
 
-function newScreen({ date, time, duration, patient, candidates = [], doctorId = team.current }) {
+function newScreen({ date, time, duration, patient, candidates = [], doctorId = canEdit(team.current) ? team.current : team.mine }) {
   const id = ++screenId;
   hideToast();
   backButton.set(() => dayScreen(date));

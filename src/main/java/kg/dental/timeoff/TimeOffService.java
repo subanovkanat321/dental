@@ -86,6 +86,12 @@ public class TimeOffService {
 				cleanEmoji, clock.instant())));
 	}
 
+	/** Чей перерыв: id врача или null — общий. */
+	@Transactional(readOnly = true)
+	public Long doctorIdOf(long id) {
+		return repository.findById(id).orElseThrow(() -> new NotFoundException("Перерыв не найден")).getDoctorId();
+	}
+
 	@Transactional
 	public void delete(long id) {
 		var timeOff = repository.findById(id).orElseThrow(() -> new NotFoundException("Перерыв не найден"));

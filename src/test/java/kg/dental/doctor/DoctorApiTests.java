@@ -226,6 +226,55 @@ class DoctorApiTests {
 		verify(telegram, never()).sendMessage(anyLong(), anyString(), anyList());
 	}
 
+	@Test
+	void doctorChangesOwnAppointmentsButOnlyViewsColleagues() throws Exception {
+		var own = id(send(SECOND, "POST", "/api/appointments", body(second, TEN)));
+		var colleagues = id(create(1, TEN));
+
+		// Своё — можно
+		assertThat(send(SECOND, "POST", "/api/appointments/" + own + "/reply", "{\"version\": 0, \"reply\": \"CONFIRMED\"}"))
+			.hasStatusOk();
+		// Чужое — смотреть можно, менять нельзя
+		assertThat(send(SECOND, "GET", "/api/appointments/" + colleagues, null)).hasStatusOk();
+		assertThat(send(SECOND, "GET", "/api/appointments?date=2099-06-01&doctorId=1", null)).hasStatusOk();
+		for (var action : new String[] { "reply", "status", "reschedule", "undo" }) {
+			assertThat(send(SECOND, "POST", "/api/appointments/" + colleagues + "/" + action, """
+					{"version": 0, "reply": "CONFIRMED", "status": "CANCELLED", "startAt": "2099-06-01T06:00:00Z",
+					 "durationMinutes": 30, "previousStatus": "SCHEDULED"}""")).as(action).hasStatus(HttpStatus.FORBIDDEN);
+		}
+		assertThat(send(SECOND, "POST", "/api/appointments/" + colleagues + "/reminder-opened", null)).hasStatus(HttpStatus.FORBIDDEN);
+		assertThat(send(SECOND, "POST", "/api/appointments/" + colleagues + "/remind-telegram", null)).hasStatus(HttpStatus.FORBIDDEN);
+		assertThat(send(SECOND, "POST", "/api/appointments", body(1, "2099-06-01T07:00:00Z"))).hasStatus(HttpStatus.FORBIDDEN);
+		assertThat(jdbc.queryForObject("select status from appointment where id = ?", String.class, colleagues))
+			.isEqualTo("SCHEDULED");
+
+		// Админ — всё
+		assertThat(send(ADMIN, "POST", "/api/appointments/" + own + "/status", "{\"version\": 1, \"status\": \"CANCELLED\"}"))
+			.hasStatusOk();
+	}
+
+	@Test
+	void doctorSetsOwnTimeOffOnlyCommonAndColleaguesAreAdmins() throws Exception {
+		assertThat(send(SECOND, "POST", "/api/time-off", """
+				{"doctorId": %d, "firstDay": "2099-06-01", "title": "Отпуск"}""".formatted(second))).hasStatus(HttpStatus.CREATED);
+		assertThat(send(SECOND, "POST", "/api/time-off", "{\"firstDay\": \"2099-06-01\", \"title\": \"Всем\"}"))
+			.hasStatus(HttpStatus.FORBIDDEN);
+		assertThat(send(SECOND, "POST", "/api/time-off", "{\"doctorId\": 1, \"firstDay\": \"2099-06-01\", \"title\": \"Ему\"}"))
+			.hasStatus(HttpStatus.FORBIDDEN);
+		var juma = jdbc.queryForObject("select id from time_off where title = 'Джума-намаз'", Long.class);
+		assertThat(mvc.delete().uri("/api/time-off/" + juma).header(HttpHeaders.AUTHORIZATION, tma(SECOND)))
+			.hasStatus(HttpStatus.FORBIDDEN);
+	}
+
+	private String body(long doctorId, String startAt) {
+		return """
+				{"doctorId": %d, "patientId": %d, "startAt": "%s", "durationMinutes": 30}""".formatted(doctorId, patient, startAt);
+	}
+
+	private static long id(MvcTestResult result) throws Exception {
+		return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
+	}
+
 	private MvcTestResult create(long doctorId, String startAt) {
 		return send(ADMIN, "POST", "/api/appointments", """
 				{"doctorId": %d, "patientId": %d, "startAt": "%s", "durationMinutes": 30}""".formatted(doctorId, patient, startAt));
