@@ -50,13 +50,6 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 			and a.endAt > :now order by a.startAt""")
 	List<Appointment> findUpcoming(Collection<Long> patientIds, Instant now);
 
-	/** Запланированные приёмы с началом в [from, to) — для утренней сводки. */
-	@Query("""
-			select a.startAt from Appointment a
-			where a.status = kg.dental.appointment.AppointmentStatus.SCHEDULED
-			and a.startAt >= :from and a.startAt < :to order by a.startAt""")
-	List<Instant> findScheduledStarts(Instant from, Instant to);
-
 	/** Прошедшие приёмы без отметки «пришёл» / «не пришёл», закончившиеся в [from, to). */
 	@Query("""
 			select count(a) from Appointment a

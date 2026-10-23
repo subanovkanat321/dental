@@ -120,6 +120,18 @@ class AppointmentApiTests {
 	}
 
 	@Test
+	void rescheduleClearsPreNoticeSoDoctorIsWarnedAboutNewTime() {
+		var id = id(create(FUTURE, 30));
+		jdbc.update("update appointment set pre_notified_at = now() where id = ?", id);
+
+		post(id, "reschedule", """
+				{"version": 0, "startAt": "2099-06-02T05:00:00Z", "durationMinutes": 30}""");
+
+		assertThat(jdbc.queryForObject("select pre_notified_at from appointment where id = ?", Timestamp.class, id))
+			.isNull();
+	}
+
+	@Test
 	void rescheduleOntoTakenTimeIs409AndKeepsOldTime() {
 		create(FUTURE, 30);
 		var id = id(create("2099-06-01T05:00:00Z", 30));

@@ -11,6 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,23 @@ class TelegramClientTests {
 			.andRespond(withSuccess("{\"ok\": true, \"result\": {\"message_id\": 1}}", MediaType.APPLICATION_JSON));
 
 		client.sendMessage(111, "Привет");
+
+		server.verify();
+	}
+
+	@Test
+	void sendMessageWithMiniAppButtonsOneRowEach() {
+		server.expect(requestTo(BASE + "/sendMessage"))
+			.andExpect(content().json("""
+					{"chat_id": 111, "text": "Сводка", "reply_markup": {"inline_keyboard": [
+					 [{"text": "Открыть сегодня", "web_app": {"url": "https://dental.test/?v=1"}}],
+					 [{"text": "Открыть завтра", "web_app": {"url": "https://dental.test/?day=tomorrow&v=1"}}]]}}""",
+					JsonCompareMode.STRICT))
+			.andRespond(withSuccess("{\"ok\": true, \"result\": {}}", MediaType.APPLICATION_JSON));
+
+		client.sendMessage(111, "Сводка",
+				List.of(new TelegramClient.Button("Открыть сегодня", URI.create("https://dental.test/?v=1")),
+						new TelegramClient.Button("Открыть завтра", URI.create("https://dental.test/?day=tomorrow&v=1"))));
 
 		server.verify();
 	}

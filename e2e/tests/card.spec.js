@@ -32,3 +32,11 @@ test('перенос: своё время в сетке выбрано, посл
   await expect(page.getByText('Время изменилось — напомните пациенту заново')).toBeVisible();
   await expect(page.getByText('Не напомнили')).toBeVisible();
 });
+
+test('«Открыть приём» из уведомления перед приёмом: ?appointment=ID — сразу карточка', async ({ page }) => {
+  const id = await addAppointment(await addPatient('Айгуль Т.'), tomorrow(), '10:00');
+  await openApp(page, { path: `/?appointment=${id}` });
+
+  await expect(page.getByRole('heading', { name: '10:00–10:30' })).toBeVisible();
+  await expect(page.locator('.name-link')).toContainText('Айгуль Т.');
+});

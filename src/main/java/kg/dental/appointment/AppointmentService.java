@@ -39,14 +39,51 @@ public class AppointmentService {
 
 	private final RecallQuery recall;
 
+	private final PreNoticeQuery preNotices;
+
 	AppointmentService(AppointmentRepository appointments, PatientService patients, Clock clock,
-			DentalProperties properties, AppointmentStatsQuery stats, RecallQuery recall) {
+			DentalProperties properties, AppointmentStatsQuery stats, RecallQuery recall, PreNoticeQuery preNotices) {
 		this.appointments = appointments;
 		this.patients = patients;
 		this.clock = clock;
 		this.properties = properties;
 		this.stats = stats;
 		this.recall = recall;
+		this.preNotices = preNotices;
+	}
+
+	/** Обзор дня для уведомлений врачу: только числа и время. */
+	@Transactional(readOnly = true)
+	public DayOverview overview(LocalDate date, Instant now) {
+		var zone = properties.timeZone();
+		var active = appointments
+			.findDay(date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
+			.stream()
+			.filter(a -> a.getStatus() != AppointmentStatus.CANCELLED)
+			.toList();
+		return new DayOverview(date, active.size(),
+				active.stream().map(Appointment::getStartAt).min(Comparator.naturalOrder()).orElse(null),
+				active.stream().map(Appointment::getEndAt).max(Comparator.naturalOrder()).orElse(null),
+				active.stream().filter(a -> a.getReply() == PatientReply.CONFIRMED).count(),
+				active.stream().filter(a -> a.getReply() == PatientReply.RESCHEDULE).count(),
+				active.stream().filter(a -> a.getReminderOpenedAt() != null || a.getReply() != PatientReply.NONE).count(),
+				active.stream()
+					.filter(a -> a.getStatus() == AppointmentStatus.SCHEDULED && a.getEndAt().isBefore(now))
+					.count());
+	}
+
+	/** Прошедшие за 7 дней приёмы без отметки «пришёл» / «не пришёл» (R7/D9). */
+	@Transactional(readOnly = true)
+	public long unmarkedWeek(Instant now) {
+		var zone = properties.timeZone();
+		var weekAgo = LocalDate.ofInstant(now, zone).minusDays(7).atStartOfDay(zone).toInstant();
+		return appointments.countUnmarked(weekAgo, now);
+	}
+
+	/** Приёмы, о которых пора предупредить врача; каждый — один раз (PreNoticeQuery). */
+	@Transactional
+	public List<PreNotice> claimPreNotices(Instant now, Duration lead) {
+		return preNotices.claim(now, now.plus(lead));
 	}
 
 	/** Кого пора позвать на профосмотр: последний визит больше {@code months} месяцев назад. */
@@ -71,20 +108,6 @@ public class AppointmentService {
 		var from = date.atStartOfDay(zone).toInstant();
 		var to = date.plusDays(1).atStartOfDay(zone).toInstant();
 		return appointments.findDay(from, to).stream().map(AppointmentView::of).toList();
-	}
-
-	/**
-	 * Для утренней сводки: приёмы на {@code date} и неотмеченные за 7 дней до {@code now}
-	 * (R7/D9: не только «вчера» — в понедельник видно и субботу).
-	 */
-	@Transactional(readOnly = true)
-	public DaySummary summary(LocalDate date, Instant now) {
-		var zone = properties.timeZone();
-		var starts = appointments.findScheduledStarts(date.atStartOfDay(zone).toInstant(),
-				date.plusDays(1).atStartOfDay(zone).toInstant());
-		var weekAgo = LocalDate.ofInstant(now, zone).minusDays(7).atStartOfDay(zone).toInstant();
-		return new DaySummary(starts.size(), starts.isEmpty() ? null : starts.getFirst(),
-				appointments.countUnmarked(weekAgo, now));
 	}
 
 	/**
@@ -144,7 +167,9 @@ public class AppointmentService {
 	public AppointmentView reschedule(long id, AppointmentRequests.Reschedule request) {
 		var appointment = require(id, request.version());
 		appointment.reschedule(request.startAt(), Duration.ofMinutes(request.durationMinutes()));
-		return save(appointment);
+		var saved = save(appointment);
+		preNotices.reset(id); // новое время — предупредить о нём заново
+		return saved;
 	}
 
 	@Transactional

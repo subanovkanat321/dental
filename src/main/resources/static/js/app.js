@@ -1063,9 +1063,19 @@ async function start() {
   }
   // Подпись клиники для текста напоминания; без неё напоминание всё равно работает
   api('GET', '/api/settings').then((loaded) => { settings = loaded; }).catch(() => {});
-  // Кнопка «Открыть завтра» в утренней сводке ведёт на ?day=tomorrow (DD3)
-  const tomorrow = new URLSearchParams(location.search).get('day') === 'tomorrow';
-  dayScreen(tomorrow ? addDays(todayIn(), 1) : todayIn());
+  const params = new URLSearchParams(location.search);
+  // «Открыть приём» в уведомлении перед приёмом: сразу карточка этого приёма
+  const appointmentId = params.get('appointment');
+  if (appointmentId) {
+    try {
+      cardScreen(await api('GET', `/api/appointments/${encodeURIComponent(appointmentId)}`));
+      return;
+    } catch (e) {
+      if (fatal(e)) return; // иначе (приём удалён, сеть) — просто «День»
+    }
+  }
+  // Кнопка «Открыть завтра» в сводке ведёт на ?day=tomorrow (DD3)
+  dayScreen(params.get('day') === 'tomorrow' ? addDays(todayIn(), 1) : todayIn());
 }
 
 start();

@@ -45,10 +45,16 @@ public class TelegramClient {
 		call("sendMessage", new TelegramApi.SendMessage(chatId, text, null), ANY);
 	}
 
-	/** Сообщение с кнопкой под ним, которая открывает Mini App по адресу webAppUrl (https). */
-	public void sendMessage(long chatId, String text, String buttonText, URI webAppUrl) {
-		var button = new TelegramApi.InlineButton(buttonText, new TelegramApi.WebAppInfo(webAppUrl.toString()));
-		call("sendMessage", new TelegramApi.SendMessage(chatId, text, new TelegramApi.InlineKeyboard(List.of(List.of(button)))),
+	/** Кнопка под сообщением, которая открывает Mini App по адресу webAppUrl (https). */
+	public record Button(String text, URI webAppUrl) {
+	}
+
+	/** Сообщение с кнопками под ним — каждая на своей строке. */
+	public void sendMessage(long chatId, String text, List<Button> buttons) {
+		var rows = buttons.stream()
+			.map(b -> List.of(new TelegramApi.InlineButton(b.text(), new TelegramApi.WebAppInfo(b.webAppUrl().toString()))))
+			.toList();
+		call("sendMessage", new TelegramApi.SendMessage(chatId, text, rows.isEmpty() ? null : new TelegramApi.InlineKeyboard(rows)),
 				ANY);
 	}
 
