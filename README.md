@@ -56,6 +56,17 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 подписанную тестовую initData у `/dev/init-data` (только профиль `local`), а MainButton
 заменяет своя кнопка внизу.
 
+## Браузерные тесты
+
+`e2e/` — Playwright: Chromium открывает Mini App «внутри Telegram» (заглушка
+`window.Telegram.WebApp` с подписанной initData, MainButton, BackButton, `openLink`) против
+настоящего бэкенда и Postgres. Сценарии: запись и «Время занято», WhatsApp (порядок «отметка →
+ссылка», «Не сохранено»), «Напомнить следующему», «Отменить → Вернуть», перенос, ошибки 500 /
+401 / 403, карточка пациента, лист ожидания, статистика, профосмотры. В CI — job `e2e`.
+
+На ноутбуке: `./mvnw spring-boot:run`, затем в `e2e/`: `npm ci`, `npx playwright install chromium`,
+`npx playwright test`. Тесты чистят локальную базу.
+
 ## Защита от двойной записи
 
 Держит сама база (`V1__init.sql`): ограничение `EXCLUDE USING gist` не даёт двум активным

@@ -1,0 +1,13 @@
+{
+  "name": "dental-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Браузерные тесты Mini App против настоящего бэкенда (README, «Браузерные тесты»)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "pg": "8.16.3"
+  }
+}
