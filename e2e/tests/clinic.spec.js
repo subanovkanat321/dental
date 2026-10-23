@@ -48,3 +48,10 @@ test('врач: «Техподдержка» — позвонить и част�
   await page.getByText('Не появилась кнопка «Открыть день»').click();
   await expect(page.getByText('Нажмите /start в чате с ботом.')).toBeVisible();
 });
+
+test('пока «О клинике» пустое — админу подсказка в меню, по ней — форма', async ({ page }) => {
+  await openApp(page);
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: /Адрес и техподдержка не заданы/ }).click();
+  await expect(page.getByRole('heading', { name: 'О клинике' })).toBeVisible();
+});

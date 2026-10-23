@@ -379,3 +379,7 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 .faq { margin: 8px 0; padding: 12px 14px; background: var(--card); border-radius: 14px; box-shadow: var(--shadow); }
 .faq summary { font-weight: 600; cursor: pointer; }
 .faq p { margin: 8px 0 0; color: var(--hint); }
+.setup-note {
+  display: block; width: 100%; margin: 8px 0; padding: 12px 14px; border: 0; border-radius: 14px; text-align: left;
+  background: color-mix(in srgb, var(--status-wait) 16%, var(--card)); color: var(--text); font-weight: 600; cursor: pointer;
+}

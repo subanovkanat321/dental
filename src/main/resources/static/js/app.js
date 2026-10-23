@@ -843,7 +843,12 @@ function menuScreen(back) {
   mainButton.hide();
   backButton.set(back);
   const self = () => menuScreen(back);
+  // Пока адрес и поддержка пустые, пациенты их не видят — админу напоминание с переходом
+  const c = team.clinic || {};
+  const clinicEmpty = !c.address && !c.mapUrl && !c.supportUrl && !c.supportPhone;
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Меню'),
+    team.admin && clinicEmpty ? h('button', { type: 'button', class: 'setup-note', onclick: () => clinicScreen(self) },
+      '⚠️ Адрес и техподдержка не заданы — пациенты их не видят. Нажмите, чтобы заполнить.') : null,
     h('button', { type: 'button', class: 'btn', onclick: () => patientsScreen(self) }, 'Пациенты и лист ожидания'),
     h('button', { type: 'button', class: 'btn', onclick: () => recallScreen(self) }, 'Позвать на профосмотр'),
     h('button', { type: 'button', class: 'btn', onclick: () => statsScreen(self) }, 'Статистика неявок'),
