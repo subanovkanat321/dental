@@ -40,6 +40,7 @@ export async function resetDb() {
   await db.query('truncate waitlist_entry, appointment, patient, telegram_contact restart identity cascade');
   // Врачи — как после миграции V11: один врач №1 без Telegram
   await db.query('delete from time_off where doctor_id is not null');
+  await db.query('delete from doctor_hours');
   await db.query('delete from doctor where id <> 1');
   await db.query(`update doctor set full_name = 'Врач', about = null, telegram_id = null, photo = null,
     photo_type = null, photo_version = 0, active = true where id = 1`);

@@ -105,3 +105,21 @@ test('врач видит «День» коллеги, но не меняет е
   await expect(page.getByRole('link', { name: 'Позвонить' })).toBeVisible();
   expect((await db.query('select status from appointment where id = $1', [colleagues])).rows[0].status).toBe('SCHEDULED');
 });
+
+test('врач задаёт свои часы: пн 09–12, остальные дни — выходной', async ({ page }) => {
+  const second = await addDoctor('Айгерим Садыкова', 222);
+  await openApp(page, { initData: signInitData(222) });
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Мои часы работы' }).click();
+  await expect(page.getByLabel('Понедельник', { exact: true })).toBeDisabled(); // «Как у клиники»
+  await page.getByRole('button', { name: 'Свои часы' }).click();
+  for (const day of ['Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']) {
+    await page.getByLabel(day, { exact: true }).uncheck();
+  }
+  await page.getByLabel('Понедельник: до').fill('12:00');
+  await pressMainButton(page);
+  await expect(page.locator('#toast')).toHaveText('✅ Часы работы сохранены');
+
+  const { rows } = await db.query('select weekday, start_time, end_time from doctor_hours where doctor_id = $1', [second]);
+  expect(rows).toEqual([{ weekday: 1, start_time: '09:00:00', end_time: '12:00:00' }]);
+});

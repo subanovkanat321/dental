@@ -21,18 +21,18 @@ public class SlotService {
 
 	private final AppointmentRepository appointments;
 
-	private final WorkSchedule schedule;
-
 	private final DentalProperties properties;
 
 	private final Clock clock;
 
 	private final TimeOffService timeOff;
 
-	SlotService(AppointmentRepository appointments, WorkSchedule schedule, DentalProperties properties, Clock clock,
-			TimeOffService timeOff) {
+	private final DoctorHoursService hours;
+
+	SlotService(AppointmentRepository appointments, DentalProperties properties, Clock clock,
+			TimeOffService timeOff, DoctorHoursService hours) {
+		this.hours = hours;
 		this.appointments = appointments;
-		this.schedule = schedule;
 		this.properties = properties;
 		this.clock = clock;
 		this.timeOff = timeOff;
@@ -45,18 +45,20 @@ public class SlotService {
 	 */
 	@Transactional(readOnly = true)
 	public SlotsView slots(LocalDate date, long doctorId, Duration duration, Long excludeId) {
-		if (!schedule.isWorkingDay(date)) {
-			return new SlotsView(false, schedule.start(), schedule.end(), List.of(), List.of(), List.of(), null);
+		// Часы врача: свои («Часы работы») или клиники (WORK_HOURS, WORK_DAYS)
+		var day = hours.on(doctorId, date);
+		if (!day.working()) {
+			return new SlotsView(false, day.start(), day.end(), List.of(), List.of(), List.of(), null);
 		}
 		var offs = timeOff.on(date, doctorId);
 		var wholeDay = offs.stream().filter(t -> t.wholeDay()).findFirst();
 		if (wholeDay.isPresent()) {
 			var off = new SlotsView.Break(null, null, wholeDay.get().title(), wholeDay.get().emoji());
-			return new SlotsView(false, schedule.start(), schedule.end(), List.of(), List.of(), List.of(), off);
+			return new SlotsView(false, day.start(), day.end(), List.of(), List.of(), List.of(), off);
 		}
 		var zone = properties.timeZone();
-		var from = date.atTime(schedule.start()).atZone(zone).toInstant();
-		var to = date.atTime(schedule.end()).atZone(zone).toInstant();
+		var from = date.atTime(day.start()).atZone(zone).toInstant();
+		var to = date.atTime(day.end()).atZone(zone).toInstant();
 		// Перерыв — как занятое время, но только в рабочих часах: «обед 12–14» при работе с 13 — это 13–14
 		var breaks = new ArrayList<SlotsView.Break>();
 		for (var t : offs) {
@@ -70,7 +72,7 @@ public class SlotService {
 		breaks.forEach(b -> busy.add(new TimeRange(b.start(), b.end())));
 		var free = FreeTime.free(from, to, busy, clock.instant());
 		var starts = duration == null ? List.<Instant>of() : FreeTime.starts(free, duration);
-		return new SlotsView(true, schedule.start(), schedule.end(), free, starts, breaks, null);
+		return new SlotsView(true, day.start(), day.end(), free, starts, breaks, null);
 	}
 
 	private static Instant max(Instant a, Instant b) {

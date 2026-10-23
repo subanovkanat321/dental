@@ -88,6 +88,8 @@ const ICONS = {
   'Услуги для самозаписи': '🦷',
   'Перерывы и выходные': '☕',
   'Мой профиль': '🧑‍⚕️',
+  'Мои часы работы': '🕘',
+  'Часы работы': '🕘',
   'Врачи': '👩‍⚕️',
   'О клинике': '🏥',
   'Техподдержка': '🛟',
@@ -874,6 +876,7 @@ function menuScreen(back) {
     h('button', { type: 'button', class: 'btn', onclick: () => servicesScreen(self) }, 'Услуги для самозаписи'),
     h('button', { type: 'button', class: 'btn', onclick: () => timeOffScreen(self) }, 'Перерывы и выходные'),
     team.mine ? h('button', { type: 'button', class: 'btn', onclick: () => profileScreen(self) }, 'Мой профиль') : null,
+    team.mine ? h('button', { type: 'button', class: 'btn', onclick: () => hoursScreen(self, team.mine) }, 'Мои часы работы') : null,
     team.admin ? h('button', { type: 'button', class: 'btn', onclick: () => doctorsScreen(self) }, 'Врачи') : null,
     team.admin ? h('button', { type: 'button', class: 'btn', onclick: () => clinicScreen(self) }, 'О клинике') : null,
     h('button', { type: 'button', class: 'btn', onclick: () => supportScreen(self) }, 'Техподдержка')));
@@ -1066,6 +1069,68 @@ async function refreshTeam() {
   }
 }
 
+// ---------- Часы работы врача ----------
+
+const WEEK = [['MONDAY', 'Понедельник'], ['TUESDAY', 'Вторник'], ['WEDNESDAY', 'Среда'], ['THURSDAY', 'Четверг'],
+  ['FRIDAY', 'Пятница'], ['SATURDAY', 'Суббота'], ['SUNDAY', 'Воскресенье']];
+
+/**
+ * Свои дни и часы приёма врача — по ним свободное время и самозапись. «Как у клиники» —
+ * общие часы кабинета. Перерывы внутри дня (обед, джума-намаз) — в «Перерывах».
+ */
+async function hoursScreen(back, doctorId) {
+  const id = ++screenId;
+  backButton.set(back);
+  mainButton.hide();
+  let loaded;
+  try {
+    loaded = await api('GET', `/api/doctors/${doctorId}/hours`);
+  } catch (e) {
+    if (id !== screenId || fatal(e)) return;
+    render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e))));
+    return;
+  }
+  if (id !== screenId) return;
+  let custom = loaded.custom;
+  const byDay = Object.fromEntries(loaded.days.map((d) => [d.weekday, d]));
+  const rows = WEEK.map(([code, name]) => {
+    const on = h('input', { type: 'checkbox', checked: Boolean(byDay[code]), 'aria-label': name });
+    const start = h('input', { type: 'time', step: 900, value: (byDay[code]?.start || '09:00').slice(0, 5), 'aria-label': `${name}: с` });
+    const end = h('input', { type: 'time', step: 900, value: (byDay[code]?.end || '18:00').slice(0, 5), 'aria-label': `${name}: до` });
+    const sync = () => { start.disabled = !on.checked || !custom; end.disabled = !on.checked || !custom; on.disabled = !custom; };
+    on.addEventListener('change', sync);
+    return { code, on, start, end, sync, node: h('div', { class: 'hours-row' }, h('label', {}, on, ` ${name}`), start, h('span', {}, '–'), end) };
+  });
+  const kind = h('div', { class: 'segments' });
+  const error = h('div', { class: 'error', role: 'alert' });
+  function draw() {
+    kind.replaceChildren(
+      h('button', { type: 'button', 'aria-pressed': String(!custom), onclick: () => { custom = false; draw(); } }, 'Как у клиники'),
+      h('button', { type: 'button', 'aria-pressed': String(custom), onclick: () => { custom = true; draw(); } }, 'Свои часы'));
+    rows.forEach((r) => r.sync());
+  }
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Часы работы'),
+    h('div', { class: 'hint' }, doctorById(doctorId)?.fullName || ''),
+    h('p', { class: 'hint' }, 'В эти дни и часы пациенты смогут записаться к врачу. Обед и намаз — в «Перерывах».'),
+    kind, h('div', { class: 'hours' }, rows.map((r) => r.node)), error));
+  draw();
+  mainButton.set('Сохранить', async () => {
+    error.textContent = '';
+    const days = custom ? rows.filter((r) => r.on.checked).map((r) => ({ weekday: r.code, start: r.start.value, end: r.end.value })) : [];
+    if (custom && !days.length) { error.textContent = 'Отметьте хотя бы один рабочий день'; return; }
+    mainButton.busy(true);
+    try {
+      await api('PUT', `/api/doctors/${doctorId}/hours`, { days });
+      haptic('success');
+      toast('✅ Часы работы сохранены', null, null, 'ok');
+      back();
+    } catch (e) {
+      mainButton.busy(false);
+      if (!fatal(e)) error.textContent = e instanceof ApiError ? (e.fields.days || errorText(e)) : errorText(e);
+    }
+  });
+}
+
 // ---------- Врачи (админ) ----------
 
 /** Врачи кабинета: завести, привязать Telegram, скрыть. Только админ (ALLOWED_TELEGRAM_IDS). */
@@ -1109,6 +1174,7 @@ function doctorEditScreen(doctor, back) {
     h('p', { class: 'hint' }, 'Свой id врач узнает у бота @userinfobot. Потом пусть нажмёт /start в нашем боте — появится кнопка «Открыть день».'),
     doctor ? h('label', { class: 'consent', for: 'doctor-active' }, active, ' Работает (показывать пациентам)') : null,
     doctor ? h('button', { type: 'button', class: 'btn', onclick: () => profileScreen(() => doctorEditScreen(doctor, back), doctor.id) }, 'Фото и профиль') : null,
+    doctor ? h('button', { type: 'button', class: 'btn', onclick: () => hoursScreen(() => doctorEditScreen(doctor, back), doctor.id) }, 'Часы работы') : null,
     error));
   mainButton.set('Сохранить', async () => {
     Object.values(errors).forEach((e) => { e.textContent = ''; });
