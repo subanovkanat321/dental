@@ -194,6 +194,11 @@ const mainButton = {
       fallback.hidden = false;
     }
   },
+  /** Сменить только подпись (без мигания hide/show): кнопка записи подсказывает следующий шаг. */
+  text(text) {
+    if (insideTelegram) tg.MainButton.setText(text);
+    else fallback.querySelector('button').textContent = text;
+  },
   hide() {
     if (this.handler && insideTelegram) {
       tg.MainButton.offClick(this.handler);

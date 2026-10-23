@@ -264,9 +264,9 @@ function bookScreen(ui, me, doctor) {
       serviceBox.replaceChildren(h('div', { class: 'hint' }, t('unavailable')));
       return;
     }
-    serviceBox.replaceChildren(h('span', {}, t('service')), ...me.services.map((s) => h('button', {
+    serviceBox.replaceChildren(...me.services.map((s) => h('button', {
       type: 'button', class: 'btn', 'aria-pressed': String(service?.id === s.id),
-      onclick: () => { service = s; chosen = ''; drawServices(); loadSlots(); },
+      onclick: () => { service = s; chosen = ''; drawServices(); loadSlots(); updateNext(); goTo(timeStep); },
     },
     h('span', { class: 'ico', 'aria-hidden': 'true' }, serviceEmoji(s.name)),
     // Для скринридера — «Чистка · 60 мин» одной фразой; на экране длительность отдельной строкой
@@ -304,7 +304,7 @@ function bookScreen(ui, me, doctor) {
       .map((b) => h('div', { class: 'break-note' }, breakNote(b)));
     grid.replaceChildren(...notes, ...(starts.length ? starts.map((time) => h('button', {
       type: 'button', class: 'slot time', 'aria-pressed': String(time === chosen),
-      onclick: () => { chosen = time; timeError.textContent = ''; markChosen(); },
+      onclick: () => { chosen = time; timeError.textContent = ''; markChosen(); updateNext(); goTo(dataStep); },
     }, time)) : [h('div', { class: 'hint' }, slots.dayOff ? t('otherDay') : slots.workingDay ? t('noFree') : t('dayOff'))]));
   }
 
@@ -353,10 +353,71 @@ function bookScreen(ui, me, doctor) {
             phoneError.textContent = t('phoneLost');
           }
           drawPhone();
+          updateNext();
         });
       },
     }, t('sharePhone'));
     phoneBox.replaceChildren(share);
+  }
+
+  // Три шага с номерами: сразу видно, что после услуги есть ещё день, время и данные
+  const serviceStep = h('section', { class: 'step' }, h('h2', { class: 'step-title' }, t('stepService')), serviceBox);
+  const timeStep = h('section', { class: 'step' }, h('h2', { class: 'step-title' }, t('stepTime')),
+    h('div', { class: 'field' }, h('span', {}, t('day')), dayBox),
+    h('div', { class: 'field' }, h('span', {}, t('time')), timeError, grid));
+  const dataStep = h('section', { class: 'step' }, h('h2', { class: 'step-title' }, t('stepData')),
+    h('label', { class: 'field' }, h('span', {}, t('patientName')), nameInput, nameError),
+    h('div', { class: 'field' }, h('span', {}, t('phone')), phoneBox, phoneError),
+    h('label', { class: 'consent', for: 'consent' }, consent, ` ${t('consent')}`),
+    consentError);
+
+  /** Какой шаг ещё не сделан: null — всё готово, можно записываться. */
+  function missing() {
+    if (!service) return 'service';
+    if (!chosen) return 'time';
+    if (!nameInput.value.trim() || !me.phone || !consent.checked) return 'data';
+    return null;
+  }
+
+  /** Главная кнопка подсказывает следующий шаг: пока не всё выбрано — «Далее ↓», а не «Записаться». */
+  function updateNext() {
+    const step = missing();
+    ui.mainButton.text(step === 'service' ? t('nextService') : step === 'time' ? t('nextTime')
+      : step === 'data' ? t('nextData') : t('book'));
+  }
+
+  /** Плавно к шагу (после выбора — к следующему) и мягкая подсветка: «вот здесь». */
+  function goTo(step) {
+    // Ниже 1/3 экрана — уже видно, не дёргаем
+    const top = step.getBoundingClientRect().top;
+    if (top > 0 && top < window.innerHeight / 3) return;
+    step.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function highlight(step) {
+    step.classList.remove('step-attention');
+    void step.offsetWidth; // перезапуск анимации при повторном нажатии
+    step.classList.add('step-attention');
+  }
+
+  /** Нажатие главной кнопки всегда что-то делает: ведёт к пропущенному шагу или записывает. */
+  function next() {
+    const step = missing();
+    if (!step) {
+      submit();
+      return;
+    }
+    const el = step === 'service' ? serviceStep : step === 'time' ? timeStep : dataStep;
+    ui.haptic('warning');
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    highlight(el);
+    if (step === 'data') {
+      if (!nameInput.value.trim()) { nameError.textContent = t('nameRequired'); nameInput.focus({ preventScroll: true }); }
+      else if (!me.phone) phoneError.textContent = t('phoneRequired');
+      else consentError.textContent = t('consentRequired');
+    } else if (step === 'time') {
+      timeError.textContent = t('pickTime');
+    }
   }
 
   async function submit() {
@@ -401,20 +462,19 @@ function bookScreen(ui, me, doctor) {
     hero(h, t('bookTitle'), t('pickServiceSub'), profileOf(doctor)),
     me.doctors.length > 1 ? h('button', { type: 'button', class: 'link', onclick: () => doctorScreen(ui, me) }, t('otherDoctor')) : null,
     me.doctors.length > 1 ? null : clinicCard(ui, me.clinic),
-    serviceBox,
-    h('div', { class: 'field' }, h('span', {}, t('day')), dayBox),
-    h('div', { class: 'field' }, h('span', {}, t('time')), timeError, grid),
-    h('label', { class: 'field' }, h('span', {}, t('patientName')), nameInput, nameError),
-    h('div', { class: 'field' }, h('span', {}, t('phone')), phoneBox, phoneError),
-    h('label', { class: 'consent', for: 'consent' }, consent, ` ${t('consent')}`),
-    consentError,
+    serviceStep,
+    timeStep,
+    dataStep,
     error,
     supportFooter(ui, me.clinic)));
   drawServices();
   drawDays();
   drawPhone();
   loadSlots();
-  ui.mainButton.set(t('book'), submit);
+  ui.mainButton.set(t('book'), next);
+  updateNext();
+  nameInput.addEventListener('input', updateNext);
+  consent.addEventListener('change', updateNext);
 }
 
 async function reload(ui) {

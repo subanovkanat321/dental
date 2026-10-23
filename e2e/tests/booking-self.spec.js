@@ -25,10 +25,12 @@ test('пациент записывается сам, врач подтверж�
   await patient.getByRole('button', { name: 'Поделиться номером' }).click();
   await expect(patient.getByText('+996 700 112 233')).toBeVisible();
 
-  expect(await mainButtonText(patient)).toBe('Записаться');
+  // Пока нет согласия — кнопка ведёт к шагу «Ваши данные», а не пытается записать
+  expect(await mainButtonText(patient)).toBe('Далее: ваши данные ↓');
   await pressMainButton(patient);
   await expect(patient.getByText('Нужно согласие на обработку данных')).toBeVisible();
   await patient.locator('#consent').check();
+  expect(await mainButtonText(patient)).toBe('Записаться');
   await pressMainButton(patient);
 
   await expect(patient.getByRole('heading', { name: 'Ваша запись' })).toBeVisible();
@@ -106,4 +108,27 @@ test('пациент переносит запись — новое время �
   await expect(page.locator('.big')).toContainText('в 12:00');
   const { rows } = await db.query('select status from appointment');
   expect(rows[0].status).toBe('REQUESTED');
+});
+
+test('кнопка внизу ведёт по шагам: услуга → время → данные', async ({ page }) => {
+  await saveContact(STRANGER, '996700112233');
+  await openApp(page, { initData: signInitData(STRANGER) });
+
+  await expect(page.getByRole('heading', { name: '① Услуга' })).toBeVisible();
+  expect(await mainButtonText(page)).toBe('Выберите услугу ↑');
+  await pressMainButton(page);
+  await expect(page.locator('.step').first()).toHaveClass(/step-attention/);
+  expect(await db.query('select count(*)::int as n from appointment').then((r) => r.rows[0].n)).toBe(0);
+
+  await page.getByRole('button', { name: 'Осмотр и консультация · 30 мин' }).click();
+  expect(await mainButtonText(page)).toBe('Далее: выбрать время ↓');
+  // Экран сам уехал к дням и времени
+  await expect(page.getByRole('heading', { name: '② День и время' })).toBeInViewport();
+  await pressMainButton(page);
+  await expect(page.getByText('Выберите время')).toBeVisible();
+
+  await page.locator('.day').nth(2).click();
+  await page.locator('.slot', { hasText: /^10:00$/ }).click();
+  expect(await mainButtonText(page)).toBe('Далее: ваши данные ↓');
+  await expect(page.getByRole('heading', { name: '③ Ваши данные' })).toBeInViewport();
 });

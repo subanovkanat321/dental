@@ -422,3 +422,17 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
   color: var(--hint); font-size: .85rem; font-weight: 600; cursor: pointer;
 }
 .lang-switch button[aria-pressed=true] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+/* ---------- Запись пациента по шагам: ① Услуга → ② День и время → ③ Ваши данные ---------- */
+.step { scroll-margin-top: 12px; margin: 0 -8px; padding: 2px 8px 6px; border-radius: var(--radius); }
+.screen .step-title {
+  margin: 22px 0 4px; font-size: 1.15rem; font-weight: 700; color: var(--text);
+  text-transform: none; letter-spacing: normal;
+}
+/* «Вот здесь»: мягкая вспышка шага, к которому привела главная кнопка */
+.step-attention { animation: step-attention 1.4s ease-out; }
+@keyframes step-attention {
+  0%, 35% { box-shadow: 0 0 0 3px var(--accent), 0 0 0 10px var(--accent-soft); background: var(--accent-soft); }
+  100% { box-shadow: 0 0 0 0 transparent; background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .step-attention { animation: none; outline: 3px solid var(--accent); } }

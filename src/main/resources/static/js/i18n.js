@@ -63,6 +63,12 @@ const TEXTS = {
     today: 'Сегодня',
     tomorrow: 'Завтра',
     whenAt: '{when}, в {time}',
+    stepService: '① Услуга',
+    stepTime: '② День и время',
+    stepData: '③ Ваши данные',
+    nextService: 'Выберите услугу ↑',
+    nextTime: 'Далее: выбрать время ↓',
+    nextData: 'Далее: ваши данные ↓',
   },
   ky: {
     langRu: 'Русский',
@@ -124,6 +130,12 @@ const TEXTS = {
     today: 'Бүгүн',
     tomorrow: 'Эртең',
     whenAt: '{when}, саат {time}',
+    stepService: '① Кызмат',
+    stepTime: '② Күн жана убакыт',
+    stepData: '③ Сиздин маалыматтар',
+    nextService: 'Кызматты тандаңыз ↑',
+    nextTime: 'Андан ары: убакыт тандоо ↓',
+    nextData: 'Андан ары: маалыматтарыңыз ↓',
   },
 };
 
