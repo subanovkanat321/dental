@@ -38,6 +38,7 @@ export function signInitData(userId = DOCTOR, authDate = Math.floor(Date.now() /
 
 export async function resetDb() {
   await db.query('truncate waitlist_entry, appointment, patient, telegram_contact restart identity cascade');
+  await db.query('delete from supply');
   // Врачи — как после миграции V11: один врач №1 без Telegram
   await db.query('delete from time_off where doctor_id is not null');
   await db.query('delete from doctor_hours');

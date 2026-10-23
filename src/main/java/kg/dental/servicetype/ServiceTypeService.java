@@ -43,6 +43,23 @@ public class ServiceTypeService {
 		return ServiceTypeView.of(service);
 	}
 
+	/**
+	 * Удалить услугу. По ней уже были записи — не удаляем, а скрываем: у прошлых приёмов
+	 * остаётся название, в отчётах — выручка.
+	 *
+	 * @return true — удалена, false — скрыта
+	 */
+	@Transactional
+	public boolean delete(long id) {
+		var service = require(id);
+		if (services.usage(id) > 0) {
+			service.update(service.getName(), service.getDurationMinutes(), service.getPriceSom(), false);
+			return false;
+		}
+		services.delete(service);
+		return true;
+	}
+
 	/** Услуга, доступная пациенту: скрытую выбрать нельзя. */
 	@Transactional(readOnly = true)
 	public ServiceType requireActive(long id) {

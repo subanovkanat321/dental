@@ -103,6 +103,13 @@ const ICONS = {
   'Поделиться номером': '📱',
   'Отменить запись': '✖️',
   Повторить: '🔄',
+  Склад: '📦',
+  'Удалить запись': '🗑️',
+  'Удалить услугу': '🗑️',
+  'Удалить материал': '🗑️',
+  'Удалить все записи': '🗑️',
+  Списать: '➖',
+  'Пришла поставка': '➕',
 };
 
 /** Значок SVG (белый, 24×24) для круглых кнопок WhatsApp и Telegram. */
@@ -256,6 +263,39 @@ function toast(text, actionText, action, tone = '') {
 function hideToast() {
   clearTimeout(toastTimer);
   document.getElementById('toast').hidden = true;
+}
+
+/**
+ * Кнопка необратимого действия: первое нажатие — «Точно? Нажмите ещё раз», второе — делает.
+ * Без системного диалога: он по-разному выглядит в Telegram и браузере, а два нажатия
+ * подряд случайно не сделать. Через 4 с без второго нажатия кнопка возвращается.
+ */
+function confirmButton(text, action) {
+  let armed = false;
+  let timer;
+  const b = h('button', {
+    type: 'button', class: 'btn danger',
+    onclick: async () => {
+      const label = b.lastChild;
+      if (!armed) {
+        armed = true;
+        label.nodeValue = 'Точно? Нажмите ещё раз';
+        haptic('warning');
+        timer = setTimeout(() => { armed = false; label.nodeValue = text; }, 4000);
+        return;
+      }
+      clearTimeout(timer);
+      b.disabled = true;
+      try {
+        await action();
+      } finally {
+        armed = false;
+        label.nodeValue = text;
+        b.disabled = false;
+      }
+    },
+  }, text);
+  return b;
 }
 
 // ---------- Общие ошибки ----------
@@ -761,6 +801,20 @@ function cardScreen(a, notice) {
     actions.push(button('Исправить: приём состоялся', () => act('status', { status: 'DONE' })));
   }
 
+  // Удалить насовсем (ошибочная или тестовая запись) — только админ; для отмены есть «Отменить приём»
+  if (team.admin) {
+    actions.push(h('div', { class: 'danger-zone' }, confirmButton('Удалить запись', async () => {
+      try {
+        await api('DELETE', `/api/appointments/${a.id}`);
+        haptic('success');
+        toast('🗑️ Запись удалена', null, null, 'ok');
+        dayScreen(dateOf(a.startAt));
+      } catch (e) {
+        if (!fatal(e)) error.replaceChildren(errorText(e));
+      }
+    })));
+  }
+
   render(h('section', { class: 'screen' },
     backButton.link(),
     h('h1', { class: 'time' }, `${timeOf(a.startAt)}–${timeOf(a.endAt)}`),
@@ -962,6 +1016,7 @@ function menuScreen(back) {
     h('button', { type: 'button', class: 'btn', onclick: () => patientsScreen(self) }, 'Пациенты и лист ожидания'),
     h('button', { type: 'button', class: 'btn', onclick: () => recallScreen(self) }, 'Позвать на профосмотр'),
     h('button', { type: 'button', class: 'btn', onclick: () => statsScreen(self) }, 'Статистика неявок'),
+    h('button', { type: 'button', class: 'btn', onclick: () => supplyScreen(self) }, 'Склад'),
     h('button', { type: 'button', class: 'btn', onclick: () => servicesScreen(self) }, 'Услуги для самозаписи'),
     h('button', { type: 'button', class: 'btn', onclick: () => timeOffScreen(self) }, 'Перерывы и выходные'),
     team.mine ? h('button', { type: 'button', class: 'btn', onclick: () => profileScreen(self) }, 'Мой профиль') : null,
@@ -992,7 +1047,8 @@ function clinicScreen(back) {
     h('h2', {}, 'Техподдержка приложения'),
     h('label', { class: 'field' }, h('span', {}, 'Telegram'), telegram, errors.supportTelegram),
     h('label', { class: 'field' }, h('span', {}, 'Телефон'), phone, errors.supportPhone),
-    error));
+    error,
+    clearAllBox()));
   mainButton.set('Сохранить', async () => {
     Object.values(errors).forEach((e) => { e.textContent = ''; });
     error.textContent = '';
@@ -1012,6 +1068,38 @@ function clinicScreen(back) {
       if (!Object.keys(errors).some((k) => f[k])) error.textContent = errorText(e);
     }
   });
+}
+
+/**
+ * «С чистого листа»: удалить все записи (после показа и тестов), врачи, услуги, пациенты и склад
+ * остаются. Нужно впечатать УДАЛИТЬ — сервер проверяет слово сам, кнопка его не обходит.
+ */
+function clearAllBox() {
+  const word = h('input', { type: 'text', maxLength: 20, placeholder: 'УДАЛИТЬ', autocomplete: 'off', 'aria-label': 'Слово для подтверждения' });
+  const fieldError = h('div', { class: 'error', role: 'alert' });
+  const run = h('button', {
+    type: 'button', class: 'btn danger',
+    onclick: async () => {
+      fieldError.textContent = '';
+      run.disabled = true;
+      try {
+        const { deleted } = await api('POST', '/api/appointments/delete-all', { confirm: word.value });
+        haptic('success');
+        word.value = '';
+        toast(`🗑️ Удалено записей: ${deleted}`, null, null, 'ok');
+      } catch (e) {
+        if (fatal(e)) return;
+        haptic('error');
+        fieldError.textContent = (e instanceof ApiError && e.fields.confirm) || errorText(e);
+      } finally {
+        run.disabled = false;
+      }
+    },
+  }, 'Удалить все записи');
+  return h('div', { class: 'danger-zone' }, h('h2', {}, 'Начать с чистого листа'),
+    h('p', { class: 'hint' }, 'Удалит все приёмы и заявки — например, после показа или тестов. ',
+      'Врачи, услуги, пациенты и склад останутся. Вернуть можно только из резервной копии.'),
+    h('label', { class: 'field' }, h('span', {}, 'Впишите УДАЛИТЬ'), word, fieldError), run);
 }
 
 /** Частые вопросы врачей — ответ сразу, без звонка в поддержку. */
@@ -1460,7 +1548,18 @@ function serviceEditScreen(service, back) {
     h('label', { class: 'field' }, h('span', {}, 'Длительность, мин'), duration, errors.durationMinutes),
     h('label', { class: 'field' }, h('span', {}, 'Цена «от», сом'), price, errors.priceSom),
     service ? h('label', { class: 'consent', for: 'active' }, active, ' Показывать пациентам') : null,
-    error));
+    error,
+    // Услугу из старых записей не удалить (история и статистика ссылаются) — сервер её скрывает
+    service && team.admin ? h('div', { class: 'danger-zone' }, confirmButton('Удалить услугу', async () => {
+      try {
+        const { deleted } = await api('DELETE', `/api/service-types/${service.id}`);
+        haptic('success');
+        toast(deleted ? '🗑️ Услуга удалена' : '🙈 Услуга есть в записях — скрыли её от пациентов', null, null, 'ok');
+        back();
+      } catch (e) {
+        if (!fatal(e)) error.textContent = errorText(e);
+      }
+    })) : null));
   mainButton.set('Сохранить', async () => {
     Object.values(errors).forEach((e) => { e.textContent = ''; });
     error.textContent = '';
@@ -1481,6 +1580,200 @@ function serviceEditScreen(service, back) {
       errors.durationMinutes.textContent = f.durationMinutes || '';
       errors.priceSom.textContent = f.priceSom || '';
       if (!f.name && !f.durationMinutes && !f.priceSom) error.textContent = errorText(e);
+    }
+  });
+}
+
+// ---------- Склад ----------
+
+const UNITS = ['шт', 'уп', 'мл', 'г'];
+const REASONS = { USE: 'списали', DELIVERY: 'поставка', CORRECTION: 'пересчёт' };
+
+/** «20 шт» / «⚠️ 2 уп — мало» / «❌ закончился». */
+function stockText(s) {
+  if (s.quantity === 0) return '❌ закончился';
+  return `${s.low ? '⚠️ ' : ''}${s.quantity} ${s.unit}${s.low ? ' — мало' : ''}`;
+}
+
+/**
+ * Расходники кабинета: сколько осталось, «−1» прямо в списке (взяли карпулу — одно нажатие).
+ * Дошли до порога — бот пишет всем «⚠️ Заканчивается». Мало — сверху списка.
+ * @param openId сразу открыть материал (кнопка «Открыть склад» из бота)
+ */
+async function supplyScreen(back, openId) {
+  const id = ++screenId;
+  mainButton.hide();
+  backButton.set(back);
+  const self = () => supplyScreen(back);
+  let list;
+  try {
+    list = await api('GET', '/api/supplies');
+  } catch (e) {
+    if (id !== screenId || fatal(e)) return;
+    render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e))));
+    return;
+  }
+  if (id !== screenId) return;
+  const opened = openId && list.find((s) => s.id === openId);
+  if (opened) {
+    supplyEditScreen(opened, self);
+    return;
+  }
+  const sorted = [...list].sort((a, b) => Number(b.low) - Number(a.low));
+  const low = list.filter((s) => s.low).length;
+
+  const item = (s) => {
+    const stock = h('span', { class: `stock tone-${s.low ? 'bad' : 'hint'}` }, stockText(s));
+    const minus = h('button', {
+      type: 'button', class: 'minus', 'aria-label': `Списать 1: ${s.name}`, disabled: s.quantity === 0,
+      onclick: async (e) => {
+        e.stopPropagation(); // не открывать материал
+        minus.disabled = true;
+        try {
+          Object.assign(s, await api('POST', `/api/supplies/${s.id}/move`, { delta: -1, reason: 'USE' }));
+          haptic('success');
+          stock.textContent = stockText(s);
+          stock.className = `stock tone-${s.low ? 'bad' : 'hint'}`;
+          if (s.low) li.dataset.tone = 'bad';
+        } catch (err) {
+          if (fatal(err)) return;
+          haptic('error');
+          toast(errorText(err), null, null, 'bad');
+        }
+        minus.disabled = s.quantity === 0;
+      },
+    }, '−1');
+    const li = h('li', {
+      class: 'row supply', role: 'listitem', tabindex: 0, 'data-tone': s.low ? 'bad' : null,
+      onclick: () => supplyEditScreen(s, self),
+      onkeydown: (e) => e.key === 'Enter' && supplyEditScreen(s, self),
+    }, h('span', { class: 'name' }, s.name), minus, stock);
+    return li;
+  };
+
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Склад'),
+    list.length
+      ? h('p', { class: 'hint' }, low ? `⚠️ Пора заказать: ${low}. ` : '', 'Взяли материал — «−1». Пришла поставка — откройте материал.')
+      : h('p', { class: 'hint' }, 'Добавьте расходники — карпулы, перчатки, слепочную массу. Когда материал дойдёт до порога, бот напишет всем: «Заканчивается».'),
+    h('ul', { class: 'rows', role: 'list' }, sorted.map(item)),
+    h('button', { type: 'button', class: 'btn primary', onclick: () => supplyEditScreen(null, self) }, '+ Добавить материал')));
+}
+
+/** Материал: списать или принять поставку на N, название и порог, история, удалить (админ). */
+async function supplyEditScreen(s, back) {
+  const id = ++screenId;
+  hideToast();
+  backButton.set(back);
+  const name = h('input', { type: 'text', maxLength: 100, value: s?.name || '', placeholder: 'Например: Карпула артикаин' });
+  const unit = h('input', { type: 'text', maxLength: 10, value: s?.unit || 'шт', 'aria-label': 'Единица' });
+  const units = h('div', { class: 'units' }, UNITS.map((u) => {
+    const b = h('button', { type: 'button', class: 'btn', 'aria-pressed': String(unit.value === u),
+      onclick: () => { unit.value = u; units.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); } }, u);
+    return b;
+  }));
+  const quantity = h('input', { type: 'number', min: 0, step: 1, inputMode: 'numeric', value: s ? '' : 0 });
+  const min = h('input', { type: 'number', min: 0, step: 1, inputMode: 'numeric', value: s?.minQuantity ?? 0 });
+  const errors = Object.fromEntries(['name', 'unit', 'quantity', 'minQuantity', 'delta'].map((k) => [k, h('div', { class: 'error' })]));
+  const error = h('div', { class: 'error', role: 'alert' });
+  const showErrors = (e) => {
+    const f = e instanceof ApiError ? e.fields : {};
+    Object.entries(errors).forEach(([k, el]) => { el.textContent = f[k] || ''; });
+    if (!Object.keys(errors).some((k) => f[k])) error.textContent = errorText(e);
+  };
+  const settings = [
+    h('label', { class: 'field' }, h('span', {}, 'Название'), name, errors.name),
+    h('div', { class: 'field' }, h('span', {}, 'Единица'), units, unit, errors.unit),
+    h('label', { class: 'field' }, h('span', {}, 'Сколько оставить в запасе'), min, errors.minQuantity),
+    h('p', { class: 'hint' }, 'Когда останется столько или меньше, бот напишет: «⚠️ Заканчивается — пора заказать».'),
+  ];
+
+  if (!s) {
+    render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Новый материал'),
+      settings[0], settings[1],
+      h('label', { class: 'field' }, h('span', {}, 'Сколько есть сейчас'), quantity, errors.quantity),
+      settings[2], settings[3], error));
+    mainButton.set('Добавить', async () => {
+      error.textContent = '';
+      mainButton.busy(true);
+      try {
+        await api('POST', '/api/supplies', {
+          name: name.value, unit: unit.value, quantity: Number(quantity.value || 0), minQuantity: Number(min.value || 0),
+        });
+        haptic('success');
+        toast('✅ Добавлено', null, null, 'ok');
+        back();
+      } catch (e) {
+        mainButton.busy(false);
+        if (!fatal(e)) showErrors(e);
+      }
+    });
+    return;
+  }
+
+  let history = [];
+  try {
+    history = await api('GET', `/api/supplies/${s.id}/history`);
+  } catch (e) {
+    if (fatal(e)) return;
+  }
+  if (id !== screenId) return;
+
+  const amount = h('input', { type: 'number', min: 1, step: 1, inputMode: 'numeric', value: 1 });
+  const move = async (sign) => {
+    error.textContent = '';
+    errors.delta.textContent = '';
+    const n = Math.trunc(Number(amount.value));
+    if (!(n > 0)) {
+      errors.delta.textContent = 'Сколько — целое число больше 0';
+      return;
+    }
+    try {
+      const updated = await api('POST', `/api/supplies/${s.id}/move`, { delta: sign * n, reason: sign < 0 ? 'USE' : 'DELIVERY' });
+      haptic('success');
+      toast(sign < 0 ? `➖ Списано ${n} ${s.unit}` : `➕ Принято ${n} ${s.unit}`, null, null, 'ok');
+      supplyEditScreen(updated, back);
+    } catch (e) {
+      if (fatal(e)) return;
+      haptic('error');
+      showErrors(e);
+    }
+  };
+
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, s.name),
+    h('p', { class: `stock-big tone-${s.low ? 'bad' : 'ok'}` }, s.quantity === 0 ? '❌ Закончился' : `Осталось: ${s.quantity} ${s.unit}`),
+    h('label', { class: 'field' }, h('span', {}, `Сколько, ${s.unit}`), amount, errors.delta),
+    h('div', { class: 'pair' },
+      h('button', { type: 'button', class: 'btn', onclick: () => move(-1) }, 'Списать'),
+      h('button', { type: 'button', class: 'btn primary', onclick: () => move(1) }, 'Пришла поставка')),
+    error,
+    h('h2', {}, 'Настройки'),
+    ...settings,
+    history.length ? h('h2', {}, 'История') : null,
+    history.length ? h('ul', { class: 'history', role: 'list' }, history.map((m) => h('li', {},
+      h('b', { class: m.delta < 0 ? 'tone-bad' : 'tone-ok' }, `${m.delta > 0 ? '+' : '−'}${Math.abs(m.delta)}`),
+      ` ${REASONS[m.reason] || ''}${m.doctorName ? ` · ${m.doctorName}` : ''}`,
+      h('span', { class: 'hint' }, ` · ${sentText(m.createdAt)}`)))) : null,
+    team.admin ? h('div', { class: 'danger-zone' }, confirmButton('Удалить материал', async () => {
+      try {
+        await api('DELETE', `/api/supplies/${s.id}`);
+        haptic('success');
+        toast('🗑️ Материал удалён', null, null, 'ok');
+        back();
+      } catch (e) {
+        if (!fatal(e)) error.textContent = errorText(e);
+      }
+    })) : null));
+  mainButton.set('Сохранить', async () => {
+    error.textContent = '';
+    mainButton.busy(true);
+    try {
+      const updated = await api('PUT', `/api/supplies/${s.id}`, { name: name.value, unit: unit.value, minQuantity: Number(min.value || 0) });
+      haptic('success');
+      toast('✅ Сохранено', null, null, 'ok');
+      supplyEditScreen(updated, back);
+    } catch (e) {
+      mainButton.busy(false);
+      if (!fatal(e)) showErrors(e);
     }
   });
 }
@@ -2022,6 +2315,13 @@ async function start() {
     } catch (e) {
       if (fatal(e)) return; // иначе (приём удалён, сеть) — просто «День»
     }
+  }
+  // «Открыть склад» в сигнале «заканчивается» — сразу этот материал
+  const supplyId = Number(params.get('supply'));
+  if (supplyId) {
+    const today = () => dayScreen(todayIn());
+    supplyScreen(today, supplyId);
+    return;
   }
   // Кнопка «Открыть завтра» в сводке ведёт на ?day=tomorrow (DD3)
   dayScreen(params.get('day') === 'tomorrow' ? addDays(todayIn(), 1) : todayIn());

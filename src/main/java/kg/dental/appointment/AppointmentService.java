@@ -293,6 +293,18 @@ public class AppointmentService {
 		return save(Appointment.requested(patient, doctorId, startAt, serviceType, clock.instant()));
 	}
 
+	/** Удалить приём совсем (ошибочная или тестовая запись) — в отличие от «Отменить», следа не остаётся. */
+	@Transactional
+	public void delete(long id) {
+		appointments.delete(require(id));
+	}
+
+	/** «С чистого листа»: удалить все приёмы. Врачи, пациенты, услуги и настройки остаются. */
+	@Transactional
+	public int deleteAll() {
+		return appointments.deleteAllAppointments();
+	}
+
 	/** Пациент сам переносит свою запись в боте (свободное время проверил BookingService). */
 	@Transactional
 	public AppointmentView rescheduleByPatient(long id, Instant startAt) {

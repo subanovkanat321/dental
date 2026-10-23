@@ -2,13 +2,16 @@ package kg.dental.appointment;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 
 import jakarta.validation.Valid;
 import kg.dental.auth.InitDataAuthFilter;
 import kg.dental.doctor.Staff;
+import kg.dental.shared.ForbiddenException;
 import kg.dental.shared.InvalidFieldException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -54,6 +57,36 @@ class AppointmentController {
 	List<DayCount> counts(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
 			@RequestParam(defaultValue = "21") int days, @RequestParam long doctorId) {
 		return service.dayCounts(from, Math.clamp(days, 1, 62), doctorId);
+	}
+
+	/** Удалить приём совсем — только админ (врачу хватает «Отменить»: статистика честнее). */
+	@DeleteMapping("/{id}")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	void delete(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @PathVariable long id) {
+		requireAdmin(me);
+		service.delete(id);
+	}
+
+	record DeleteAll(String confirm) {
+	}
+
+	record Deleted(int deleted) {
+	}
+
+	/** Удалить все приёмы — админ, с подтверждением словом «УДАЛИТЬ»: случайно не нажать. */
+	@PostMapping("/delete-all")
+	Deleted deleteAll(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @RequestBody DeleteAll request) {
+		requireAdmin(me);
+		if (!"УДАЛИТЬ".equals(request.confirm() == null ? null : request.confirm().strip().toUpperCase(Locale.ROOT))) {
+			throw new InvalidFieldException("confirm", "Напишите слово УДАЛИТЬ");
+		}
+		return new Deleted(service.deleteAll());
+	}
+
+	private void requireAdmin(long me) {
+		if (!staff.isAdmin(me)) {
+			throw new ForbiddenException("Удалять записи может администратор");
+		}
 	}
 
 	record Payment(Integer amountSom, PaymentMethod method) {

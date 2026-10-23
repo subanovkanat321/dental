@@ -397,3 +397,20 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 .revenue-grid > div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 12px; background: var(--page); }
 .revenue-grid b { font-size: 1.05rem; }
 .revenue .btn { margin-bottom: 0; }
+
+/* ---------- Склад ---------- */
+.row.supply { grid-template-columns: 1fr auto; min-height: 58px; }
+.row.supply .stock { grid-column: 1; font-size: .88rem; font-weight: 600; }
+.row.supply .minus {
+  grid-column: 2; grid-row: 1 / span 2; min-width: 56px; height: 44px; border: 0; border-radius: 12px;
+  background: var(--accent-soft); color: var(--accent); font-size: 1.05rem; font-weight: 700; cursor: pointer;
+}
+.row.supply .minus:disabled { opacity: .4; cursor: default; }
+.stock-big { font-size: 1.25rem; font-weight: 700; margin: 4px 0 8px; }
+.history { list-style: none; margin: 0; padding: 0; }
+.history li { padding: 10px 0; border-bottom: 1px solid var(--separator); font-size: .92rem; }
+.history b { display: inline-block; min-width: 44px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pair .btn { margin: 0; justify-content: center; }
+.units { display: flex; gap: 8px; margin-bottom: 8px; }
+.units .btn { flex: 1; margin: 0; min-height: 40px; padding: 8px; justify-content: center; }

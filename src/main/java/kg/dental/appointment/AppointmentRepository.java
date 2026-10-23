@@ -60,6 +60,11 @@ interface AppointmentRepository extends JpaRepository<Appointment, Long> {
 			and a.endAt >= :from and a.endAt < :to""")
 	long countUnmarked(long doctorId, Instant from, Instant to);
 
+	/** «С чистого листа»: все приёмы одним запросом, без загрузки сущностей. */
+	@Modifying
+	@Query(value = "delete from appointment", nativeQuery = true)
+	int deleteAllAppointments();
+
 	/**
 	 * Отметка «напоминание открыто» прямым UPDATE, без {@code @Version}: её шлёт кнопка
 	 * WhatsApp запросом keepalive, ответ которого Mini App не ждёт. Если бы отметка

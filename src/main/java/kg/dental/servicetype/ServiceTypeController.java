@@ -8,11 +8,16 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import kg.dental.auth.InitDataAuthFilter;
+import kg.dental.doctor.Staff;
+import kg.dental.shared.ForbiddenException;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -36,8 +41,11 @@ class ServiceTypeController {
 
 	private final ServiceTypeService service;
 
-	ServiceTypeController(ServiceTypeService service) {
+	private final Staff staff;
+
+	ServiceTypeController(ServiceTypeService service, Staff staff) {
 		this.service = service;
+		this.staff = staff;
 	}
 
 	@GetMapping
@@ -49,6 +57,18 @@ class ServiceTypeController {
 	@ResponseStatus(HttpStatus.CREATED)
 	ServiceTypeView create(@Valid @RequestBody Request request) {
 		return service.create(request.name(), request.durationMinutes(), request.priceSom());
+	}
+
+	record Deleted(boolean deleted) {
+	}
+
+	/** Удалить — админ; по услуге были записи — она скрывается (deleted: false). */
+	@DeleteMapping("/{id}")
+	Deleted delete(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me, @PathVariable long id) {
+		if (!staff.isAdmin(me)) {
+			throw new ForbiddenException("Удалить услугу может администратор");
+		}
+		return new Deleted(service.delete(id));
 	}
 
 	@PutMapping("/{id}")

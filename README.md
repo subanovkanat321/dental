@@ -119,6 +119,19 @@ V14: у состоявшегося приёма — оплата в целых �
 Свою выручку видит врач, любого врача и весь кабинет — админ. «📤 Отчёт за месяц для Excel» —
 CSV (`;`, BOM) приходит в чат с ботом; без имён и телефонов пациентов.
 
+## Склад и удаление
+
+V15 `supply`, `supply_movement`: «Меню → 📦 Склад» — расходники с остатком и порогом «сколько
+оставить в запасе». «−1» прямо в списке, в материале — «Списать N» / «Пришла поставка +N» и
+история (кто и когда). Остаток меняется одним `UPDATE … where quantity + delta >= 0`: два врача
+одновременно не спишут последнюю карпулу дважды (второму — 409 `not-enough`). Перешли порог вниз —
+всем врачам и админам в бот «⚠️ Заканчивается: …» с кнопкой «Открыть склад» (`?supply=ID`), один
+раз на переход. Удалить материал — админ.
+
+Удаление (только админ, двумя нажатиями): запись — в карточке приёма; все записи — «О клинике →
+Начать с чистого листа» (впечатать УДАЛИТЬ; врачи, услуги, пациенты и склад остаются); услуга —
+в «Услугах»: без записей удаляется, с записями — скрывается от пациентов (история не ломается).
+
 ## Адрес и техподдержка
 
 «Меню → О клинике» (админ, V12 `clinic_settings`): адрес, ссылка 2ГИС (сервер принимает только
@@ -184,7 +197,10 @@ https-ссылки 2gis.kg / 2gis.ru / 2gis.com / go.2gis.com), Telegram и те
 | `POST /api/patients/{id}/recall-invited` | кнопка WhatsApp «пора на осмотр» нажата |
 | `GET /api/patient/booking/slots?date=`, `POST /api/patient/booking/reschedule` `{startAt}` | перенос своей записи пациентом |
 | `GET /api/patient/me`, `GET /api/patient/slots?date=&doctorId=&serviceTypeId=`, `POST /api/patient/booking`, `POST /api/patient/booking/cancel` | самозапись: любой, кого подписал Telegram; кто он — из initData |
-| `GET/POST/PUT /api/service-types` | услуги для самозаписи (врач) |
+| `GET/POST/PUT /api/service-types`, `DELETE /api/service-types/{id}` | услуги для самозаписи (врач); удалить — админ, `{deleted:false}` — была в записях, скрыта |
+| `GET/POST /api/supplies`, `PUT/DELETE /api/supplies/{id}`, `GET /api/supplies/{id}/history` | склад: `{name, unit, quantity, minQuantity}`; удалить — админ |
+| `POST /api/supplies/{id}/move` `{delta, reason}` | списать (−) / поставка (+); 409 `not-enough` — столько нет |
+| `DELETE /api/appointments/{id}`, `POST /api/appointments/delete-all` `{confirm:"УДАЛИТЬ"}` | удалить запись / все записи — админ |
 | `GET /api/waitlist`, `POST /api/waitlist` `{patientId, durationMinutes}`, `DELETE /api/waitlist/{id}` | лист ожидания |
 | `POST /api/waitlist/{id}/book` `{startAt}` | записать или перенести в окно и убрать из листа — одной транзакцией |
 | `GET /api/appointments?date=2027-06-01&doctorId=1` | приёмы дня врача по Бишкеку |

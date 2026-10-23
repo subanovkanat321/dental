@@ -77,6 +77,23 @@ public class DoctorNotifier {
 		log.info("{}: отправлено {} из {}", kind, sent, recipients.size());
 	}
 
+	/** Всем сотрудникам (врачам и админам) — новость кабинета, например «заканчивается материал». */
+	public void sendToStaff(String kind, String text, String query) {
+		var buttons = buttons(List.of(new Link("Открыть склад", query)));
+		var recipients = staff.allTelegramIds();
+		var sent = 0;
+		for (var chatId : recipients) {
+			try {
+				telegram.sendMessage(chatId, text, buttons);
+				sent++;
+			}
+			catch (TelegramException e) {
+				log.warn("{}: не доставлено: {}", kind, e.getMessage());
+			}
+		}
+		log.info("{}: отправлено {} из {}", kind, sent, recipients.size());
+	}
+
 	/** Пациенту — ответ о его заявке (самозапись). Не доставлено — только в лог. */
 	public void sendToPatient(long telegramId, String kind, String text, List<Link> links) {
 		sendToPatient(telegramId, kind, text, links, List.of());
