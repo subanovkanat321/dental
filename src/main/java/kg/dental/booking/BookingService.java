@@ -11,6 +11,7 @@ import kg.dental.DentalProperties;
 import kg.dental.appointment.AppointmentService;
 import kg.dental.appointment.SlotService;
 import kg.dental.patient.PatientService;
+import kg.dental.clinic.ClinicService;
 import kg.dental.doctor.DoctorService;
 import kg.dental.doctor.Staff;
 import kg.dental.servicetype.ServiceTypeService;
@@ -61,9 +62,12 @@ class BookingService {
 
 	private final Staff staff;
 
+	private final ClinicService clinics;
+
 	BookingService(BookingProperties booking, TelegramProperties telegram, DentalProperties properties,
 			PatientService patients, AppointmentService appointments, SlotService slots, ServiceTypeService services,
-			ApplicationEventPublisher events, Clock clock, DoctorService doctors, Staff staff) {
+			ApplicationEventPublisher events, Clock clock, DoctorService doctors, Staff staff, ClinicService clinics) {
+		this.clinics = clinics;
 		this.doctors = doctors;
 		this.staff = staff;
 		this.booking = booking;
@@ -85,7 +89,7 @@ class BookingService {
 				profile.map(PatientService.BotProfile::fullName).orElse(null),
 				profile.map(PatientService.BotProfile::phone).orElse(null), current(telegramId),
 				booking.enabled() ? services.active() : List.of(), telegram.clinicContact(), booking.daysAhead(),
-				doctors.active());
+				doctors.active(), clinics.view());
 	}
 
 	@Transactional(readOnly = true)

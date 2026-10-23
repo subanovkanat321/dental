@@ -49,14 +49,19 @@ public class TelegramClient {
 	 * Кнопка под сообщением: открывает Mini App по адресу webAppUrl (https) или, если задан
 	 * callbackData, присылает боту нажатие с этими данными (ответ пациента на напоминание).
 	 */
-	public record Button(String text, URI webAppUrl, String callbackData) {
+	public record Button(String text, URI webAppUrl, String callbackData, URI url) {
 
 		public Button(String text, URI webAppUrl) {
-			this(text, webAppUrl, null);
+			this(text, webAppUrl, null, null);
 		}
 
 		public static Button callback(String text, String data) {
-			return new Button(text, null, data);
+			return new Button(text, null, data, null);
+		}
+
+		/** Обычная ссылка (2ГИС, t.me поддержки): Telegram откроет её сам. */
+		public static Button link(String text, URI url) {
+			return new Button(text, null, null, url);
 		}
 
 	}
@@ -72,11 +77,17 @@ public class TelegramClient {
 			.map(row -> row.stream()
 				.map(b -> new TelegramApi.InlineButton(b.text(),
 						b.webAppUrl() == null ? null : new TelegramApi.WebAppInfo(b.webAppUrl().toString()),
-						b.callbackData()))
+						b.callbackData(), b.url() == null ? null : b.url().toString()))
 				.toList())
 			.toList();
 		call("sendMessage", new TelegramApi.SendMessage(chatId, text,
 				keyboard.isEmpty() ? null : new TelegramApi.InlineKeyboard(keyboard)), ANY);
+	}
+
+	/** Меню «/» в чате с ботом: что умеет бот. */
+	public void setMyCommands(Map<String, String> commands) {
+		call("setMyCommands", new TelegramApi.SetMyCommands(commands.entrySet().stream()
+			.map(e -> new TelegramApi.BotCommand(e.getKey(), e.getValue())).toList()), BOOLEAN);
 	}
 
 	/** Ответ на нажатие кнопки: Telegram убирает «часики» и показывает text всплывающей подсказкой. */

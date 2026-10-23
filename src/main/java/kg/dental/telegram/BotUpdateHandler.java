@@ -1,10 +1,13 @@
 package kg.dental.telegram;
 
+import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import kg.dental.AssetVersion;
 import kg.dental.BookingProperties;
+import kg.dental.clinic.ClinicService;
 import kg.dental.doctor.Staff;
 import kg.dental.patient.PatientService;
 import kg.dental.telegram.TelegramApi.CallbackQuery;
@@ -37,9 +40,13 @@ class BotUpdateHandler {
 
 	private final Staff staff;
 
+	private final ClinicService clinics;
+
 	BotUpdateHandler(TelegramClient telegram, TelegramProperties properties, AssetVersion version,
-			BookingProperties booking, PatientService patients, List<BotCallbacks> callbacks, Staff staff) {
+			BookingProperties booking, PatientService patients, List<BotCallbacks> callbacks, Staff staff,
+			ClinicService clinics) {
 		this.staff = staff;
+		this.clinics = clinics;
 		this.telegram = telegram;
 		this.properties = properties;
 		this.version = version;
@@ -88,7 +95,13 @@ class BotUpdateHandler {
 			}
 			return;
 		}
-		var start = message.text() != null && message.text().strip().startsWith("/start");
+		var text = message.text() == null ? "" : message.text().strip();
+		// /help — любому: куда обращаться (клиника, техподдержка)
+		if (text.startsWith("/help")) {
+			sendHelp(chatId);
+			return;
+		}
+		var start = text.startsWith("/start");
 		if (!staff.isStaff(message.from().id())) {
 			if (start) {
 				greetPatient(chatId);
@@ -128,6 +141,18 @@ class BotUpdateHandler {
 				telegram.sendMessage(message.chat().id(), answer.message());
 			}
 		}
+	}
+
+	private void sendHelp(long chatId) {
+		var clinic = clinics.view();
+		var buttons = new ArrayList<TelegramClient.Button>();
+		if (clinic.supportUrl() != null) {
+			buttons.add(TelegramClient.Button.link("🛟 Написать в техподдержку", URI.create(clinic.supportUrl())));
+		}
+		if (clinic.mapUrl() != null) {
+			buttons.add(TelegramClient.Button.link("📍 Как добраться (2ГИС)", URI.create(clinic.mapUrl())));
+		}
+		telegram.sendMessage(chatId, BotTexts.help(clinic, properties.clinicContact()), buttons);
 	}
 
 	private void greet(long chatId, long updateId) {

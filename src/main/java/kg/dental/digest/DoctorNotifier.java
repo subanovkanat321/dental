@@ -79,8 +79,16 @@ public class DoctorNotifier {
 
 	/** Пациенту — ответ о его заявке (самозапись). Не доставлено — только в лог. */
 	public void sendToPatient(long telegramId, String kind, String text, List<Link> links) {
+		sendToPatient(telegramId, kind, text, links, List.of());
+	}
+
+	/** @param extra кнопки-ссылки после кнопок Mini App (например, «Как добраться» в 2ГИС) */
+	public void sendToPatient(long telegramId, String kind, String text, List<Link> links,
+			List<TelegramClient.Button> extra) {
+		var all = new ArrayList<>(buttons(links));
+		all.addAll(extra);
 		try {
-			telegram.sendMessage(telegramId, text, buttons(links));
+			telegram.sendMessage(telegramId, text, all);
 			log.info("{}: отправлено пациенту", kind);
 		}
 		catch (TelegramException e) {

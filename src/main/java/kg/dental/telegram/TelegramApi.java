@@ -60,7 +60,14 @@ public final class TelegramApi {
 
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	record InlineButton(String text, @JsonProperty("web_app") WebAppInfo webApp,
-			@JsonProperty("callback_data") String callbackData) {
+			@JsonProperty("callback_data") String callbackData, String url) {
+	}
+
+	/** Команды в меню «/» бота: /start, /help. */
+	record SetMyCommands(List<BotCommand> commands) {
+	}
+
+	record BotCommand(String command, String description) {
 	}
 
 	@JsonInclude(JsonInclude.Include.NON_NULL)

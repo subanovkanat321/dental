@@ -11,8 +11,10 @@ import kg.dental.DentalProperties;
 import kg.dental.appointment.AppointmentService;
 import kg.dental.appointment.AppointmentView;
 import kg.dental.appointment.RequestDecided;
+import kg.dental.clinic.ClinicService;
 import kg.dental.digest.DoctorNotifier;
 import kg.dental.patient.PatientService;
+import kg.dental.telegram.TelegramClient;
 import kg.dental.telegram.TelegramProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -41,8 +43,11 @@ class BookingNotifications {
 
 	private final DentalProperties properties;
 
+	private final ClinicService clinics;
+
 	BookingNotifications(DoctorNotifier notifier, AppointmentService appointments, PatientService patients,
-			TelegramProperties telegram, DentalProperties properties) {
+			TelegramProperties telegram, DentalProperties properties, ClinicService clinics) {
+		this.clinics = clinics;
 		this.notifier = notifier;
 		this.appointments = appointments;
 		this.patients = patients;
@@ -76,10 +81,17 @@ class BookingNotifications {
 			return;
 		}
 		var a = appointments.get(event.appointmentId());
+		var clinic = clinics.view();
+		var text = decidedText(a, event.confirmed(), telegram.clinicContact(), properties.timeZone());
+		if (event.confirmed() && clinic.address() != null) {
+			text += "\n📍 Адрес: " + clinic.address();
+		}
+		var finalText = text;
+		var map = event.confirmed() ? PatientReminders.mapButton(clinic) : List.<TelegramClient.Button>of();
 		patients.telegramIdOf(a.patient().id())
 			.ifPresent(chatId -> notifier.sendToPatient(chatId, event.confirmed() ? "Заявка подтверждена" : "Заявка отклонена",
-					decidedText(a, event.confirmed(), telegram.clinicContact(), properties.timeZone()),
-					List.of(new DoctorNotifier.Link(event.confirmed() ? "Моя запись" : "Выбрать другое время", null))));
+					finalText, List.of(new DoctorNotifier.Link(event.confirmed() ? "Моя запись" : "Выбрать другое время", null)),
+					map));
 	}
 
 	/** «Новая заявка: вт, 24 окт, 10:00 — Осмотр и консультация (30 мин).» */

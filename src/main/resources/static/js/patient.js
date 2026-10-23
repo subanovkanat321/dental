@@ -34,6 +34,26 @@ export function startPatient(ui, me) {
   else doctorScreen(ui, me);
 }
 
+/** «📍 Бишкек, ул. Шевченко 6 · Открыть в 2ГИС» — если админ заполнил «О клинике». */
+function clinicCard(ui, clinic) {
+  const { h } = ui;
+  if (!clinic?.address && !clinic?.mapUrl) return null;
+  return h('div', { class: 'clinic-card' },
+    h('span', { class: 'clinic-pin', 'aria-hidden': 'true' }, '📍'),
+    h('span', { class: 'clinic-address' }, clinic.address || 'Как нас найти'),
+    clinic.mapUrl ? h('button', { type: 'button', class: 'btn map-btn', onclick: () => ui.openLink(clinic.mapUrl) }, 'Открыть в 2ГИС') : null);
+}
+
+/** Внизу экрана: не получается записаться — к техподдержке (Telegram или звонок). */
+function supportFooter(ui, clinic) {
+  const { h } = ui;
+  if (!clinic?.supportUrl && !clinic?.supportPhone) return null;
+  const open = () => (clinic.supportUrl ? ui.openLink(clinic.supportUrl)
+    : ui.openLink(`${new URL('../call.html', import.meta.url)}#${clinic.supportPhone}`));
+  return h('p', { class: 'support-footer' }, 'Не получается записаться? ',
+    h('button', { type: 'button', class: 'link', onclick: open }, '🛟 Техподдержка'));
+}
+
 /** Профиль врача для шапки: фото, имя, пара слов. */
 function profileOf(d) {
   return d ? { photoUrl: d.photoUrl, doctorName: d.fullName, about: d.about } : null;
@@ -54,7 +74,9 @@ function doctorScreen(ui, me) {
       : h('span', { class: 'doctor-initials', 'aria-hidden': 'true' }, initials(d.fullName)),
     h('span', { class: 'doctor-card-text' }, h('strong', {}, d.fullName), d.about ? h('span', { class: 'hint' }, d.about) : null),
     h('span', { class: 'chevron', 'aria-hidden': 'true' }, '›')))
-      : h('div', { class: 'hint' }, 'Запись пока недоступна — позвоните в клинику.')));
+      : h('div', { class: 'hint' }, 'Запись пока недоступна — позвоните в клинику.'),
+    clinicCard(ui, me.clinic),
+    supportFooter(ui, me.clinic)));
 }
 
 /** «Ваша запись»: когда, что, подтверждена ли; отменить. */
@@ -92,9 +114,11 @@ function bookingScreen(ui, me) {
       h('p', { class: 'big' }, '📅 ', capitalize(`${whenText(b.startAt)}, в ${timeOf(b.startAt)}`)),
       h('div', {}, `${serviceEmoji(b.serviceName || '')} `, b.serviceName || 'Приём у стоматолога'),
       h('p', {}, h('span', { class: `status ${b.status === 'SCHEDULED' ? 'tone-ok' : 'tone-wait'}` }, STATUS[b.status] || b.status))),
+    clinicCard(ui, me.clinic),
     me.clinicContact ? h('p', { class: 'hint' }, `📞 Вопросы — по телефону клиники: ${me.clinicContact}`) : null,
     error,
-    h('div', { class: 'danger-zone' }, cancel)));
+    h('div', { class: 'danger-zone' }, cancel),
+    supportFooter(ui, me.clinic)));
 }
 
 /** Запись: услуга → день → время → имя, телефон из Telegram, согласие → «Записаться». */
@@ -259,6 +283,7 @@ function bookScreen(ui, me, doctor) {
   ui.render(h('section', { class: 'screen' },
     hero(h, 'Запись к стоматологу', 'Выберите услугу и удобное время — врач подтвердит запись', profileOf(doctor)),
     me.doctors.length > 1 ? h('button', { type: 'button', class: 'link', onclick: () => doctorScreen(ui, me) }, '‹ Другой врач') : null,
+    me.doctors.length > 1 ? null : clinicCard(ui, me.clinic),
     serviceBox,
     h('div', { class: 'field' }, h('span', {}, 'День'), dayBox),
     h('div', { class: 'field' }, h('span', {}, 'Время'), timeError, grid),
@@ -267,7 +292,8 @@ function bookScreen(ui, me, doctor) {
     h('label', { class: 'consent', for: 'consent' }, consent,
       ' Согласен(на) на обработку персональных данных (имя и телефон) клиникой для записи на приём и напоминаний о нём'),
     consentError,
-    error));
+    error,
+    supportFooter(ui, me.clinic)));
   drawServices();
   drawDays();
   drawPhone();

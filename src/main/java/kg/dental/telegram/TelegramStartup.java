@@ -1,5 +1,7 @@
 package kg.dental.telegram;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import kg.dental.telegram.TelegramProperties.Mode;
@@ -24,6 +26,16 @@ import org.springframework.stereotype.Component;
 class TelegramStartup implements SmartLifecycle {
 
 	private static final Logger log = LoggerFactory.getLogger(TelegramStartup.class);
+
+	/** Меню «/» в чате: по порядку, как показывает Telegram. */
+	static final Map<String, String> COMMANDS = commands();
+
+	private static Map<String, String> commands() {
+		var commands = new LinkedHashMap<String, String>();
+		commands.put("start", "Записаться на приём / открыть приложение");
+		commands.put("help", "Адрес, телефон клиники и техподдержка");
+		return commands;
+	}
 
 	private final TelegramClient telegram;
 
@@ -59,6 +71,12 @@ class TelegramStartup implements SmartLifecycle {
 		}
 		// Новая версия Mini App — новый адрес в кнопке меню (AssetVersion)
 		handler.refreshMenuButtons();
+		try {
+			telegram.setMyCommands(COMMANDS);
+		}
+		catch (TelegramException e) {
+			log.info("Команды бота не обновлены: {}", e.getMessage());
+		}
 	}
 
 	private void registerWebhook() {

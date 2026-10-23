@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  * </ul>
  * Остальное — пусто: сервис ответит 422. Существует ли номер, здесь не проверить.
  */
-final class PhoneNumbers {
+public final class PhoneNumbers {
 
 	/** Разделители, которые люди ставят в номерах: пробелы, дефисы, скобки, точки. */
 	private static final Pattern SEPARATORS = Pattern.compile("[\\s\\-().]");
@@ -27,7 +27,7 @@ final class PhoneNumbers {
 	private PhoneNumbers() {
 	}
 
-	static Optional<String> normalize(String input) {
+	public static Optional<String> normalize(String input) {
 		if (input == null) {
 			return Optional.empty();
 		}

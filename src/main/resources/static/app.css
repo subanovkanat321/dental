@@ -365,3 +365,17 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 .doctor-card-text strong { font-size: 1.05rem; }
 .doctor-card-text .hint { font-size: .88rem; line-height: 1.3; }
 .chevron { font-size: 1.6rem; color: var(--hint); }
+
+/* Адрес кабинета и техподдержка */
+.clinic-card {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 10px 0; padding: 12px 14px;
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.clinic-pin { font-size: 1.3rem; }
+.clinic-address { flex: 1; min-width: 60%; font-weight: 600; }
+.clinic-card .map-btn { flex: 1 1 100%; justify-content: center; min-height: 44px; margin: 2px 0 0; background: var(--accent-soft); box-shadow: none; }
+.support-footer { margin: 24px 0 8px; text-align: center; font-size: .9rem; color: var(--hint); }
+.support-footer .link { min-height: 0; padding: 0; }
+.faq { margin: 8px 0; padding: 12px 14px; background: var(--card); border-radius: 14px; box-shadow: var(--shadow); }
+.faq summary { font-weight: 600; cursor: pointer; }
+.faq p { margin: 8px 0 0; color: var(--hint); }

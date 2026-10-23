@@ -1,10 +1,12 @@
 package kg.dental.booking;
 
+import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -15,6 +17,8 @@ import kg.dental.appointment.AppointmentService;
 import kg.dental.appointment.AppointmentStatus;
 import kg.dental.appointment.AppointmentView;
 import kg.dental.appointment.PatientReply;
+import kg.dental.clinic.ClinicService;
+import kg.dental.clinic.ClinicView;
 import kg.dental.digest.DoctorNotifier;
 import kg.dental.patient.PatientService;
 import kg.dental.shared.ConflictException;
@@ -55,8 +59,12 @@ class PatientReminders implements BotCallbacks {
 
 	private final Clock clock;
 
+	private final ClinicService clinics;
+
 	PatientReminders(AppointmentService appointments, PatientService patients, TelegramClient telegram,
-			DoctorNotifier notifier, TelegramProperties telegramProperties, DentalProperties properties, Clock clock) {
+			DoctorNotifier notifier, TelegramProperties telegramProperties, DentalProperties properties, Clock clock,
+			ClinicService clinics) {
+		this.clinics = clinics;
 		this.appointments = appointments;
 		this.patients = patients;
 		this.telegram = telegram;
@@ -82,10 +90,12 @@ class PatientReminders implements BotCallbacks {
 			throw new ConflictException(ConflictException.NOT_DELIVERED, "Бот не настроен на сервере");
 		}
 		try {
+			var clinic = clinics.view();
+			var buttons = new ArrayList<>(List.of(TelegramClient.Button.callback("Приду", "reply:" + id + ":C"),
+					TelegramClient.Button.callback("Нужно перенести", "reply:" + id + ":R")));
+			buttons.addAll(mapButton(clinic));
 			telegram.sendMessage(chatId, reminderText(a, properties.clinicSignature(), properties.timeZone(),
-					LocalDate.now(clock.withZone(properties.timeZone()))),
-					List.of(TelegramClient.Button.callback("Приду", "reply:" + id + ":C"),
-							TelegramClient.Button.callback("Нужно перенести", "reply:" + id + ":R")));
+					LocalDate.now(clock.withZone(properties.timeZone())), clinic.address()), buttons);
 		}
 		catch (TelegramException e) {
 			throw new ConflictException(ConflictException.NOT_DELIVERED,
@@ -120,10 +130,19 @@ class PatientReminders implements BotCallbacks {
 	}
 
 	/** «Здравствуйте, Айгуль! Напоминаем: завтра в 10:00 приём у стоматолога. …» — как в WhatsApp. */
-	static String reminderText(AppointmentView a, String signature, ZoneId zone, LocalDate today) {
+	static String reminderText(AppointmentView a, String signature, ZoneId zone, LocalDate today, String address) {
 		var text = "Здравствуйте, " + a.patient().fullName() + "! Напоминаем: " + when(a.startAt(), zone, today)
 				+ " приём у стоматолога. Нажмите кнопку ниже: «Приду» или «Нужно перенести».";
-		return signature == null || signature.isBlank() ? text : text + " " + signature;
+		if (address != null) {
+			text += "\n📍 Адрес: " + address;
+		}
+		return signature == null || signature.isBlank() ? text : text + "\n" + signature;
+	}
+
+	/** «📍 Как добраться (2ГИС)» — если в «О клинике» есть ссылка; иначе без кнопки. */
+	static List<TelegramClient.Button> mapButton(ClinicView clinic) {
+		return clinic.mapUrl() == null ? List.of()
+				: List.of(TelegramClient.Button.link("📍 Как добраться (2ГИС)", URI.create(clinic.mapUrl())));
 	}
 
 	static String doctorText(AppointmentView a, boolean confirmed, ZoneId zone) {

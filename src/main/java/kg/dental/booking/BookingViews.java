@@ -6,6 +6,7 @@ import java.util.List;
 import kg.dental.appointment.AppointmentStatus;
 import kg.dental.appointment.AppointmentView;
 import kg.dental.appointment.SlotsView;
+import kg.dental.clinic.ClinicView;
 import kg.dental.doctor.DoctorView;
 import kg.dental.servicetype.ServiceTypeView;
 
@@ -31,12 +32,13 @@ final class BookingViews {
 	 * @param doctor это сотрудник (врач или админ) — Mini App покажет экран врача
 	 * @param admin заводит врачей («Меню → Врачи»)
 	 * @param doctorId врач, которым работает этот сотрудник; null — админ без своего кресла
+	 * @param clinic адрес (2ГИС) и техподдержка — пациенту и врачу
 	 * @param doctors работающие врачи: сотруднику — переключатель «Дня», пациенту — выбор врача
 	 * @param phone номер, которым человек поделился; null — ещё не делился
 	 */
 	record Me(boolean doctor, boolean admin, Long doctorId, boolean bookingEnabled, String fullName, String phone,
 			Booking booking, List<ServiceTypeView> services, String clinicContact, int daysAhead,
-			List<DoctorView> doctors) {
+			List<DoctorView> doctors, ClinicView clinic) {
 	}
 
 	/**

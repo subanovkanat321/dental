@@ -19,7 +19,7 @@ let settings = { clinicSignature: '' };
  * Врачи кабинета — для сотрудника: кто я (mine), чей «День» сейчас открыт (current).
  * У каждого врача своё кресло; переключатель в шапке «Дня» — посмотреть коллегу.
  */
-const team = { doctors: [], admin: false, mine: null, current: null };
+const team = { doctors: [], admin: false, mine: null, current: null, clinic: {} };
 
 function doctorById(id) {
   return team.doctors.find((d) => d.id === id);
@@ -84,6 +84,10 @@ const ICONS = {
   'Перерывы и выходные': '☕',
   'Мой профиль': '🧑‍⚕️',
   'Врачи': '👩‍⚕️',
+  'О клинике': '🏥',
+  'Техподдержка': '🛟',
+  'Написать в Telegram': '✈️',
+  'Открыть в 2ГИС': '🗺️',
   'Фото и профиль': '📷',
   'Записать снова': '➕',
   'Записать на следующий визит': '➕',
@@ -846,7 +850,78 @@ function menuScreen(back) {
     h('button', { type: 'button', class: 'btn', onclick: () => servicesScreen(self) }, 'Услуги для самозаписи'),
     h('button', { type: 'button', class: 'btn', onclick: () => timeOffScreen(self) }, 'Перерывы и выходные'),
     team.mine ? h('button', { type: 'button', class: 'btn', onclick: () => profileScreen(self) }, 'Мой профиль') : null,
-    team.admin ? h('button', { type: 'button', class: 'btn', onclick: () => doctorsScreen(self) }, 'Врачи') : null));
+    team.admin ? h('button', { type: 'button', class: 'btn', onclick: () => doctorsScreen(self) }, 'Врачи') : null,
+    team.admin ? h('button', { type: 'button', class: 'btn', onclick: () => clinicScreen(self) }, 'О клинике') : null,
+    h('button', { type: 'button', class: 'btn', onclick: () => supportScreen(self) }, 'Техподдержка')));
+}
+
+// ---------- О клинике и техподдержка ----------
+
+/** Адрес кабинета со ссылкой 2ГИС и контакты техподдержки — их видят пациенты и врачи. Только админ. */
+function clinicScreen(back) {
+  ++screenId;
+  backButton.set(back);
+  const c = team.clinic || {};
+  const address = h('input', { type: 'text', maxLength: 200, value: c.address || '', placeholder: 'Например: Бишкек, ул. Шевченко 6' });
+  const mapUrl = h('input', { type: 'url', maxLength: 300, value: c.mapUrl || '', placeholder: 'https://2gis.kg/bishkek/…' });
+  const telegram = h('input', { type: 'text', maxLength: 40, value: c.supportTelegram ? `@${c.supportTelegram}` : '', placeholder: '@ник' });
+  const phone = h('input', { type: 'tel', maxLength: 20, value: c.supportPhone ? formatPhone(c.supportPhone) : '', placeholder: '0555 123 456' });
+  const errors = Object.fromEntries(['address', 'mapUrl', 'supportTelegram', 'supportPhone'].map((k) => [k, h('div', { class: 'error' })]));
+  const error = h('div', { class: 'error', role: 'alert' });
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'О клинике'),
+    h('p', { class: 'hint' }, 'Адрес и ссылку на карту пациенты видят при записи и в напоминаниях бота.'),
+    h('label', { class: 'field' }, h('span', {}, 'Адрес'), address, errors.address),
+    h('label', { class: 'field' }, h('span', {}, 'Ссылка 2ГИС'), mapUrl, errors.mapUrl),
+    h('p', { class: 'hint' }, 'В 2ГИС найдите кабинет → «Поделиться» → «Скопировать ссылку» и вставьте сюда.'),
+    h('h2', {}, 'Техподдержка приложения'),
+    h('label', { class: 'field' }, h('span', {}, 'Telegram'), telegram, errors.supportTelegram),
+    h('label', { class: 'field' }, h('span', {}, 'Телефон'), phone, errors.supportPhone),
+    error));
+  mainButton.set('Сохранить', async () => {
+    Object.values(errors).forEach((e) => { e.textContent = ''; });
+    error.textContent = '';
+    mainButton.busy(true);
+    try {
+      team.clinic = await api('PUT', '/api/clinic', {
+        address: address.value, mapUrl: mapUrl.value, supportTelegram: telegram.value, supportPhone: phone.value,
+      });
+      haptic('success');
+      toast('✅ Сохранено', null, null, 'ok');
+      back();
+    } catch (e) {
+      mainButton.busy(false);
+      if (fatal(e)) return;
+      const f = e instanceof ApiError ? e.fields : {};
+      Object.entries(errors).forEach(([k, el]) => { el.textContent = f[k] || ''; });
+      if (!Object.keys(errors).some((k) => f[k])) error.textContent = errorText(e);
+    }
+  });
+}
+
+/** Частые вопросы врачей — ответ сразу, без звонка в поддержку. */
+const FAQ = [
+  ['Не появилась кнопка «Открыть день»', 'Нажмите /start в чате с ботом. Если кнопки всё равно нет — попросите администратора проверить ваш Telegram id в «Меню → Врачи».'],
+  ['Вижу старую версию приложения', 'Закройте приложение (свайп вниз) и откройте снова из бота. Помогает и /start.'],
+  ['Не приходят уведомления', 'Проверьте, что чат с ботом не на «Без звука» и вы нажимали /start. Уведомления приходят врачу его приёмов.'],
+  ['Пациенту не дошло напоминание в Telegram', 'Пациент мог удалить чат с ботом. Напомните в WhatsApp или позвоните — кнопки в карточке приёма.'],
+  ['«Время занято», хотя окно пустое', 'Его только что занял другой пациент или заявка. Обновите «День» — сетка покажет свободное.'],
+];
+
+/** Техподдержка приложения: написать или позвонить тому, кто его поддерживает, и частые вопросы. */
+function supportScreen(back) {
+  ++screenId;
+  mainButton.hide();
+  backButton.set(back);
+  const c = team.clinic || {};
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Техподдержка'),
+    h('p', {}, 'Не открывается приложение, не приходят уведомления или что-то работает не так — напишите. ',
+      'Опишите, что делали, и приложите скриншот.'),
+    c.supportUrl ? h('button', { type: 'button', class: 'btn primary', onclick: () => openLink(c.supportUrl) }, 'Написать в Telegram') : null,
+    c.supportPhone ? callButton(c.supportPhone) : null,
+    !c.supportUrl && !c.supportPhone ? h('p', { class: 'hint' },
+      team.admin ? 'Контакты поддержки не заданы — добавьте их в «Меню → О клинике».' : 'Контакты поддержки пока не заданы — спросите администратора.') : null,
+    h('h2', {}, 'Частые вопросы'),
+    FAQ.map(([q, a]) => h('details', { class: 'faq' }, h('summary', {}, q), h('p', {}, a)))));
 }
 
 // ---------- Профиль врача ----------
@@ -1725,13 +1800,14 @@ async function start() {
   }
   if (!me.doctor) {
     startPatient({
-      h, render, api, mainButton, backButton, toast, haptic, fatal, errorText, tg: insideTelegram ? tg : null,
+      h, render, api, mainButton, backButton, toast, haptic, fatal, errorText, openLink, tg: insideTelegram ? tg : null,
     }, me);
     return;
   }
   team.doctors = me.doctors;
   team.admin = me.admin;
   team.mine = me.doctorId;
+  team.clinic = me.clinic;
   if (!team.doctors.length) {
     // Все врачи скрыты: админу — сразу «Врачи», иначе работать не с чем
     doctorsScreen(() => location.reload());
