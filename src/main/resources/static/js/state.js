@@ -13,6 +13,8 @@ export function rowState(a, now = new Date()) {
   if (a.status === 'CANCELLED') return { label: 'Отменён', icon: '✕', tone: 'hint', struck: true };
   if (a.status === 'DONE') return { label: 'Пришёл', icon: '✓', tone: 'ok' };
   if (a.status === 'NO_SHOW') return { label: 'Не пришёл', icon: '!', tone: 'bad' };
+  // Заявка пациента из бота: время занято, ждёт решения врача
+  if (a.status === 'REQUESTED') return { label: 'Заявка — подтвердите', icon: '✱', tone: 'wait' };
   if (new Date(a.endAt) < now) return { label: 'Отметьте: пришёл?', icon: '?', tone: 'wait' };
   if (a.reply === 'CONFIRMED') return { label: 'Придёт', icon: '●', tone: 'ok' };
   if (a.reply === 'RESCHEDULE') return { label: 'Перенос', icon: '↻', tone: 'wait' };
@@ -220,4 +222,17 @@ export function agoText(instant, now = new Date()) {
     return `${days} ${word} назад`;
   }
   return `${Math.floor(days / 30)} мес назад`;
+}
+
+// ---------- Самозапись ----------
+
+/** Дни для выбора пациентом: «Сегодня», «Завтра», «Пн 27», … — n дней начиная с сегодня. */
+export function bookingDays(today, n) {
+  return Array.from({ length: n }, (_, i) => {
+    const date = addDays(today, i);
+    const label = i === 0 ? 'Сегодня' : i === 1 ? 'Завтра'
+      : new Intl.DateTimeFormat('ru-RU', { timeZone: 'UTC', weekday: 'short', day: 'numeric' })
+        .format(new Date(`${date}T00:00:00Z`)).replace(',', '');
+    return { date, label: label.charAt(0).toUpperCase() + label.slice(1) };
+  });
 }

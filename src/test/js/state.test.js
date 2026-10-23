@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   rowState, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
-  dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
+  dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, bookingDays, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
 const NOW = new Date('2099-06-01T06:00:00Z'); // 12:00 по Бишкеку
@@ -15,6 +15,7 @@ const rows = [
   ['CANCELLED побеждает всё', { ...PAST, status: 'CANCELLED', reply: 'CONFIRMED' }, 'Отменён'],
   ['DONE', { ...PAST, status: 'DONE', reply: 'NONE' }, 'Пришёл'],
   ['NO_SHOW', { ...PAST, status: 'NO_SHOW', reply: 'CONFIRMED' }, 'Не пришёл'],
+  ['заявка пациента — раньше «отметьте»', { ...PAST, status: 'REQUESTED', reply: 'NONE' }, 'Заявка — подтвердите'],
   ['прошедший без отметки — раньше ответа', { ...PAST, status: 'SCHEDULED', reply: 'CONFIRMED' }, 'Отметьте: пришёл?'],
   ['CONFIRMED', { ...FUTURE, status: 'SCHEDULED', reply: 'CONFIRMED', reminderOpenedAt: '2099-05-31T12:00:00Z' }, 'Придёт'],
   ['RESCHEDULE', { ...FUTURE, status: 'SCHEDULED', reply: 'RESCHEDULE' }, 'Перенос'],
@@ -172,4 +173,10 @@ test('профосмотр: текст и «сколько назад»', () => 
   assert.equal(agoText('2099-05-19T06:00:00Z', now), '22 дня назад');
   assert.equal(agoText('2099-05-29T06:00:00Z', now), '12 дней назад');
   assert.equal(agoText('2098-12-01T06:00:00Z', now), '6 мес назад');
+});
+
+test('дни для самозаписи', () => {
+  const days = bookingDays('2099-06-01', 4);
+  assert.deepEqual(days.map((d) => d.label), ['Сегодня', 'Завтра', 'Ср 3', 'Чт 4']);
+  assert.equal(days[3].date, '2099-06-04');
 });

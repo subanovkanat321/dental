@@ -64,6 +64,8 @@ services:
       MORNING_DIGEST_TIME: ${MORNING_DIGEST_TIME:-09:00}
       EVENING_DIGEST_TIME: ${EVENING_DIGEST_TIME:-18:30}
       NOTIFY_BEFORE_MINUTES: ${NOTIFY_BEFORE_MINUTES:-15}
+      # Самозапись пациентов через бота: false — выключить
+      PATIENT_BOOKING: ${PATIENT_BOOKING:-true}
     # Куча 75% = 384 МБ: хватает с запасом для 5–10 запросов в минуту
     mem_limit: 512m
 

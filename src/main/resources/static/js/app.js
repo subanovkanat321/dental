@@ -6,6 +6,7 @@ import {
   reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
   weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText,
 } from './state.js';
+import { startPatient } from './patient.js';
 
 const tg = window.Telegram?.WebApp;
 const DURATIONS = [15, 30, 45, 60, 90];
@@ -397,7 +398,14 @@ function cardScreen(a, notice) {
   const undoable = (label) => (updated) => toast(label, 'Вернуть', () => undo(updated, a.status));
 
   const actions = [];
-  if (a.status === 'SCHEDULED') {
+  if (a.status === 'REQUESTED') {
+    // Заявка пациента из бота: ответ уйдёт пациенту в бот сам (RequestDecided)
+    actions.push(
+      button('Подтвердить', () => act('status', { status: 'SCHEDULED' }), 'btn primary'),
+      button('Перенести', () => rescheduleScreen(a)),
+      h('div', { class: 'danger-zone' },
+        button('Отклонить заявку', () => act('status', { status: 'CANCELLED' }), 'btn danger')));
+  } else if (a.status === 'SCHEDULED') {
     actions.push(
       h('div', { class: 'replies' }, REPLIES.map(([reply, text]) => {
         const b = button(text, () => act('reply', { reply: a.reply === reply ? 'NONE' : reply }));
@@ -431,6 +439,7 @@ function cardScreen(a, notice) {
       type: 'button', class: 'link name-link', onclick: () => patientScreen(a.patient.id, () => cardScreen(a)),
     }, a.patient.fullName, ' ›'), h('br'), formatPhone(a.patient.phone)),
     h('p', { class: `tone-${state.tone}` }, `${state.icon} ${state.label}`),
+    a.source === 'PATIENT' ? h('p', { class: 'hint' }, `Записался сам через бота${a.serviceName ? ` · ${a.serviceName}` : ''}`) : null,
     notice ? h('p', { class: 'hint' }, notice) : null,
     error,
     ...actions));
@@ -609,7 +618,66 @@ function menuScreen(back) {
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Меню'),
     h('button', { type: 'button', class: 'btn', onclick: () => patientsScreen(self) }, 'Пациенты и лист ожидания'),
     h('button', { type: 'button', class: 'btn', onclick: () => recallScreen(self) }, 'Позвать на профосмотр'),
-    h('button', { type: 'button', class: 'btn', onclick: () => statsScreen(self) }, 'Статистика неявок')));
+    h('button', { type: 'button', class: 'btn', onclick: () => statsScreen(self) }, 'Статистика неявок'),
+    h('button', { type: 'button', class: 'btn', onclick: () => servicesScreen(self) }, 'Услуги для самозаписи')));
+}
+
+// ---------- Услуги (самозапись) ----------
+
+/** Что пациент может выбрать в боте и сколько это длится. Скрытая услуга остаётся у прошлых приёмов. */
+async function servicesScreen(back) {
+  const id = ++screenId;
+  mainButton.hide();
+  backButton.set(back);
+  const self = () => servicesScreen(back);
+  let list;
+  try {
+    list = await api('GET', '/api/service-types');
+  } catch (e) {
+    if (id !== screenId || fatal(e)) return;
+    render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e))));
+    return;
+  }
+  if (id !== screenId) return;
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Услуги'),
+    h('p', { class: 'hint' }, 'Их видят пациенты, когда записываются сами. Длительность — сколько времени займёт приём.'),
+    ...list.map((s) => h('button', {
+      type: 'button', class: 'btn', onclick: () => serviceEditScreen(s, self),
+    }, `${s.name} · ${s.durationMinutes} мин`, s.active ? null : h('span', { class: 'hint' }, ' · скрыта'))),
+    h('button', { type: 'button', class: 'btn primary', onclick: () => serviceEditScreen(null, self) }, '+ Добавить услугу')));
+}
+
+function serviceEditScreen(service, back) {
+  ++screenId;
+  backButton.set(back);
+  const name = h('input', { type: 'text', value: service?.name || '', maxLength: 100 });
+  const duration = h('input', { type: 'number', min: 15, max: 240, step: 15, value: service?.durationMinutes || 30 });
+  const active = h('input', { type: 'checkbox', checked: service ? service.active : true, id: 'active' });
+  const errors = { name: h('div', { class: 'error' }), durationMinutes: h('div', { class: 'error' }) };
+  const error = h('div', { class: 'error', role: 'alert' });
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, service ? 'Услуга' : 'Новая услуга'),
+    h('label', { class: 'field' }, h('span', {}, 'Название'), name, errors.name),
+    h('label', { class: 'field' }, h('span', {}, 'Длительность, мин'), duration, errors.durationMinutes),
+    service ? h('label', { class: 'consent', for: 'active' }, active, ' Показывать пациентам') : null,
+    error));
+  mainButton.set('Сохранить', async () => {
+    Object.values(errors).forEach((e) => { e.textContent = ''; });
+    error.textContent = '';
+    mainButton.busy(true);
+    const body = { name: name.value, durationMinutes: Number(duration.value), active: active.checked };
+    try {
+      await api(service ? 'PUT' : 'POST', service ? `/api/service-types/${service.id}` : '/api/service-types', body);
+      haptic('success');
+      back();
+    } catch (e) {
+      mainButton.busy(false);
+      if (fatal(e)) return;
+      const f = e instanceof ApiError ? e.fields : {};
+      errors.name.textContent = f.name || '';
+      errors.durationMinutes.textContent = f.durationMinutes || '';
+      if (!f.name && !f.durationMinutes) error.textContent = errorText(e);
+    }
+  });
 }
 
 // ---------- Профосмотры ----------
@@ -1059,6 +1127,22 @@ async function start() {
   }
   if (!initData) {
     render(h('div', { class: 'message' }, 'Откройте приложение из бота в Telegram'));
+    return;
+  }
+  // Кто открыл: врач — «День», остальные — самозапись (patient.js)
+  let me;
+  try {
+    me = await api('GET', '/api/patient/me');
+  } catch (e) {
+    if (fatal(e)) return;
+    render(h('div', { class: 'message' }, errorText(e),
+      h('button', { type: 'button', class: 'btn primary', onclick: () => location.reload() }, 'Повторить')));
+    return;
+  }
+  if (!me.doctor) {
+    startPatient({
+      h, render, api, mainButton, backButton, toast, haptic, fatal, errorText, tg: insideTelegram ? tg : null,
+    }, me);
     return;
   }
   // Подпись клиники для текста напоминания; без неё напоминание всё равно работает

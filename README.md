@@ -67,6 +67,23 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 На ноутбуке: `./mvnw spring-boot:run`, затем в `e2e/`: `npm ci`, `npx playwright install chromium`,
 `npx playwright test`. Тесты чистят локальную базу.
 
+## Самозапись пациентов через бота
+
+Посторонний в боте (`/start`) получает кнопку «Записаться на приём». В Mini App (`js/patient.js`):
+услуга → день (до 14 дней) → время из сетки свободного → имя → «Поделиться номером»
+(`requestContact`: номер приходит боту, сохраняется только свой — `contact.user_id` = отправитель)
+→ согласие на обработку данных → «Записаться».
+
+- Заявка (`REQUESTED`) сразу занимает время; врачу в бот — «Новая заявка: вт, 24 окт, 10:00 —
+  Осмотр (30 мин)» (без имени и телефона) с кнопкой. В карточке: «Подтвердить» / «Отклонить»;
+  пациенту в бот — «запись подтверждена» или «время недоступно».
+- Не раньше чем через 2 часа и не дальше 30 дней, только время из сетки, одна запись на человека;
+  пациент сам видит и отменяет свою запись, чужие имена и расписание ему не видны.
+- Услуги и их длительность — «Меню → Услуги для самозаписи».
+- `PATIENT_BOOKING=false` — выключить: посторонние снова видят только контакт клиники.
+- **Закон КР:** согласие пациента сохраняется (`patient.consent_at`), но до настоящих пациентов
+  нужна регистрация в реестре ГАЗПД (шаг 8).
+
 ## Защита от двойной записи
 
 Держит сама база (`V1__init.sql`): ограничение `EXCLUDE USING gist` не даёт двум активным
@@ -89,6 +106,8 @@ Spring Boot 4.1, Java 25, Postgres 18, Flyway, Testcontainers. Mini App — HTML
 | `GET /api/appointments/stats?weeks=8` | по неделям: записано, пришли, не пришли, отменено, не отмечено, напомнили |
 | `GET /api/appointments/recall?months=6` | кого пора позвать на профосмотр |
 | `POST /api/patients/{id}/recall-invited` | кнопка WhatsApp «пора на осмотр» нажата |
+| `GET /api/patient/me`, `GET /api/patient/slots?date=&serviceTypeId=`, `POST /api/patient/booking`, `POST /api/patient/booking/cancel` | самозапись: любой, кого подписал Telegram; кто он — из initData |
+| `GET/POST/PUT /api/service-types` | услуги для самозаписи (врач) |
 | `GET /api/waitlist`, `POST /api/waitlist` `{patientId, durationMinutes}`, `DELETE /api/waitlist/{id}` | лист ожидания |
 | `POST /api/waitlist/{id}/book` `{startAt}` | записать или перенести в окно и убрать из листа — одной транзакцией |
 | `GET /api/appointments?date=2027-06-01` | приёмы дня по Бишкеку |

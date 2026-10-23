@@ -22,9 +22,10 @@ test('вход старше 24 часов → «Сессия устарела �
   await expect(page.getByText('Сессия устарела — откройте заново из бота')).toBeVisible();
 });
 
-test('посторонний с настоящей подписью видит текст клиники, а не расписание', async ({ page }) => {
+test('посторонний с настоящей подписью видит запись, а не расписание врача', async ({ page }) => {
   await openApp(page, { initData: signInitData(STRANGER) });
 
-  await expect(page.getByText('Это служебный бот записи клиники')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Запись к стоматологу' })).toBeVisible();
   await expect(page.locator('.rows')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Меню' })).toHaveCount(0);
 });

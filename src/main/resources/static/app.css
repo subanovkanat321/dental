@@ -102,6 +102,12 @@ button { font: inherit; color: inherit; }
 .stats { list-style: none; margin: 0; padding: 0; }
 .stat { padding: 12px 0; border-bottom: 1px solid var(--separator); }
 .stat .hint { font-size: .88rem; }
+.days { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.day { flex: 0 0 auto; min-height: 44px; padding: 0 12px; border: 1px solid var(--separator); border-radius: 8px; background: none; cursor: pointer; white-space: nowrap; }
+.day[aria-pressed=true] { background: var(--button); color: var(--button-text); border-color: var(--button); }
+.consent { display: flex; gap: 8px; align-items: flex-start; margin: 16px 0 4px; font-size: .88rem; }
+.consent input { width: 20px; height: 20px; flex: 0 0 auto; }
+.big { font-size: 1.3rem; font-weight: 600; margin: 8px 0 4px; }
 .picked { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px; background: var(--secondary-bg); border-radius: 8px; }
 
 #main-button-fallback { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); background: var(--bg); }

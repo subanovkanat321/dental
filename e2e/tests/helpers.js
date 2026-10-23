@@ -37,7 +37,7 @@ export function signInitData(userId = DOCTOR, authDate = Math.floor(Date.now() /
 }
 
 export async function resetDb() {
-  await db.query('truncate waitlist_entry, appointment, patient restart identity cascade');
+  await db.query('truncate waitlist_entry, appointment, patient, telegram_contact restart identity cascade');
 }
 
 export async function addPatient(fullName, phone = `99655${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`) {
@@ -59,8 +59,9 @@ export async function addAppointment(patientId, date, time, { status = 'SCHEDULE
  * MainButton, BackButton и openLink, которые записывают вызовы. Настоящий скрипт telegram.org
  * заблокирован — иначе он заменил бы заглушку.
  */
-export async function openApp(page, { path = '/', initData = signInitData() } = {}) {
+export async function openApp(page, { path = '/', initData = signInitData(), shareContact } = {}) {
   await page.route('https://telegram.org/**', (route) => route.abort());
+  if (shareContact) await page.exposeFunction('shareContact', shareContact);
   await page.addInitScript((data) => {
     window.__calls = [];
     const button = () => ({
@@ -82,6 +83,11 @@ export async function openApp(page, { path = '/', initData = signInitData() } = 
         MainButton: button(), BackButton: button(),
         HapticFeedback: { notificationOccurred() {} },
         openLink(url) { window.__calls.push(['openLink', url]); },
+        // «Поделиться номером»: номер получает бот — в тесте его кладёт в базу shareContact (exposeFunction)
+        requestContact(callback) {
+          if (window.shareContact) window.shareContact().then(() => callback(true));
+          else callback(false);
+        },
       },
     };
   }, initData);
@@ -109,4 +115,10 @@ export async function calls(page) {
 /** Кнопка сетки свободного времени с точным временем. */
 export function slot(page, time) {
   return page.locator('.slot', { hasText: new RegExp(`^${time}$`) });
+}
+
+/** Номер, которым человек поделился в боте, — так его сохраняет BotUpdateHandler. */
+export async function saveContact(telegramId, phone, firstName = 'Пациент') {
+  await db.query(`insert into telegram_contact (telegram_id, phone, first_name) values ($1, $2, $3)
+    on conflict (telegram_id) do update set phone = excluded.phone`, [telegramId, phone, firstName]);
 }
