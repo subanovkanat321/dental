@@ -46,6 +46,9 @@ dental:
     # Бот сам напоминает о завтрашнем приёме тем, кто записался через бота
     patient-reminder-time: ${PATIENT_REMINDER_TIME:18:00}
     patient-reminders: ${AUTO_REMIND_PATIENTS:true}
+    # На следующий день после приёма бот спрашивает оценку (1–5) у записавшихся через бота
+    review-time: ${REVIEW_TIME:12:00}
+    reviews: ${ASK_REVIEWS:true}
   # Подпись в конце напоминания в WhatsApp, например «Стоматология «Улыбка», 0555 000 000»
   clinic-signature: ${CLINIC_SIGNATURE:}
   telegram:

@@ -63,13 +63,20 @@ public class TelegramClient {
 
 	/** Сообщение с кнопками под ним — каждая на своей строке. */
 	public void sendMessage(long chatId, String text, List<Button> buttons) {
-		var rows = buttons.stream()
-			.map(b -> List.of(new TelegramApi.InlineButton(b.text(),
-					b.webAppUrl() == null ? null : new TelegramApi.WebAppInfo(b.webAppUrl().toString()),
-					b.callbackData())))
+		sendKeyboard(chatId, text, buttons.stream().map(List::of).toList());
+	}
+
+	/** Сообщение с кнопками рядами: {@code [[⭐1, ⭐2, … ⭐5]]} — пять кнопок в одну строку. */
+	public void sendKeyboard(long chatId, String text, List<List<Button>> rows) {
+		var keyboard = rows.stream()
+			.map(row -> row.stream()
+				.map(b -> new TelegramApi.InlineButton(b.text(),
+						b.webAppUrl() == null ? null : new TelegramApi.WebAppInfo(b.webAppUrl().toString()),
+						b.callbackData()))
+				.toList())
 			.toList();
-		call("sendMessage", new TelegramApi.SendMessage(chatId, text, rows.isEmpty() ? null : new TelegramApi.InlineKeyboard(rows)),
-				ANY);
+		call("sendMessage", new TelegramApi.SendMessage(chatId, text,
+				keyboard.isEmpty() ? null : new TelegramApi.InlineKeyboard(keyboard)), ANY);
 	}
 
 	/** Ответ на нажатие кнопки: Telegram убирает «часики» и показывает text всплывающей подсказкой. */

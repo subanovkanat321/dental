@@ -11,6 +11,7 @@ import kg.dental.DentalProperties;
 import kg.dental.appointment.AppointmentService;
 import kg.dental.appointment.SlotService;
 import kg.dental.patient.PatientService;
+import kg.dental.profile.ProfileService;
 import kg.dental.servicetype.ServiceTypeService;
 import kg.dental.shared.ConflictException;
 import kg.dental.shared.InvalidFieldException;
@@ -55,9 +56,12 @@ class BookingService {
 
 	private final Clock clock;
 
+	private final ProfileService profiles;
+
 	BookingService(BookingProperties booking, TelegramProperties telegram, DentalProperties properties,
 			PatientService patients, AppointmentService appointments, SlotService slots, ServiceTypeService services,
-			ApplicationEventPublisher events, Clock clock) {
+			ApplicationEventPublisher events, Clock clock, ProfileService profiles) {
+		this.profiles = profiles;
 		this.booking = booking;
 		this.telegram = telegram;
 		this.properties = properties;
@@ -75,7 +79,8 @@ class BookingService {
 		return new BookingViews.Me(telegram.isAllowed(telegramId), booking.enabled(),
 				profile.map(PatientService.BotProfile::fullName).orElse(null),
 				profile.map(PatientService.BotProfile::phone).orElse(null), current(telegramId),
-				booking.enabled() ? services.active() : List.of(), telegram.clinicContact(), booking.daysAhead());
+				booking.enabled() ? services.active() : List.of(), telegram.clinicContact(), booking.daysAhead(),
+				profiles.view());
 	}
 
 	@Transactional(readOnly = true)

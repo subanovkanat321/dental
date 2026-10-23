@@ -47,9 +47,12 @@ public class AppointmentService {
 
 	private final ApplicationEventPublisher events;
 
+	private final ReviewQuery reviews;
+
 	AppointmentService(AppointmentRepository appointments, PatientService patients, Clock clock,
 			DentalProperties properties, AppointmentStatsQuery stats, RecallQuery recall, PreNoticeQuery preNotices,
-			ApplicationEventPublisher events) {
+			ApplicationEventPublisher events, ReviewQuery reviews) {
+		this.reviews = reviews;
 		this.appointments = appointments;
 		this.patients = patients;
 		this.clock = clock;
@@ -92,6 +95,25 @@ public class AppointmentService {
 	@Transactional
 	public List<PreNotice> claimPreNotices(Instant now, Duration lead) {
 		return preNotices.claim(now, now.plus(lead));
+	}
+
+	/** Кого спросить об оценке: пришли в этот день (по Бишкеку), записывались через бота. Помечает «спросили». */
+	@Transactional
+	public List<ReviewRequest> claimReviewRequests(LocalDate day) {
+		var zone = properties.timeZone();
+		return reviews.claim(day.atStartOfDay(zone).toInstant(), day.plusDays(1).atStartOfDay(zone).toInstant(),
+				clock.instant());
+	}
+
+	/** Оценка кнопкой в боте; пусто — не его приём, не спрашивали или уже оценил. */
+	@Transactional
+	public Optional<Instant> rateFromBot(long id, long telegramId, int rating) {
+		return reviews.rate(id, telegramId, rating);
+	}
+
+	@Transactional(readOnly = true)
+	public RatingSummary ratings(int days) {
+		return reviews.summary(clock.instant().minus(Duration.ofDays(days)));
 	}
 
 	/** Кого пора позвать на профосмотр: последний визит больше {@code months} месяцев назад. */

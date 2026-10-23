@@ -1,6 +1,6 @@
 // Самозапись пациента: всё, что видит в Mini App не-врач. Общие кусочки (DOM, запросы,
 // кнопки Telegram) приходят из app.js параметром ui — без циклических импортов.
-import { todayIn, timeOf, toInstant, formatPhone, bookingDays, whenText, serviceEmoji, breakNote } from './state.js';
+import { todayIn, timeOf, toInstant, formatPhone, bookingDays, whenText, serviceEmoji, breakNote, priceText } from './state.js';
 
 const STATUS = {
   REQUESTED: '⏳ Ждёт подтверждения врача — ответ придёт в этот чат',
@@ -9,10 +9,17 @@ const STATUS = {
 
 const TOOTH = new URL('../img/tooth.svg', import.meta.url).href;
 
-/** Шапка экрана пациента: иллюстрация, заголовок и подзаголовок на бирюзовом фоне. */
-function hero(h, title, subtitle) {
-  return h('div', { class: 'hero' }, h('img', { src: TOOTH, alt: '', width: 72, height: 72 }),
-    h('div', {}, h('h1', {}, title), h('p', {}, subtitle)));
+/**
+ * Шапка экрана пациента на бирюзовом фоне: фото врача (если врач загрузил) или рисунок зуба,
+ * заголовок, имя врача и пара слов о нём — или подзаголовок по умолчанию.
+ */
+function hero(h, title, subtitle, profile) {
+  const photo = profile?.photoUrl;
+  return h('div', { class: 'hero' },
+    h('img', { src: photo || TOOTH, alt: photo ? 'Фото врача' : '', width: 72, height: 72, class: photo ? 'hero-photo' : null }),
+    h('div', {}, h('h1', {}, title),
+      profile?.doctorName ? h('div', { class: 'hero-doctor' }, profile.doctorName) : null,
+      h('p', {}, profile?.about || subtitle)));
 }
 
 export function startPatient(ui, me) {
@@ -55,7 +62,7 @@ function bookingScreen(ui, me) {
     },
   }, 'Отменить запись');
   ui.render(h('section', { class: 'screen' },
-    hero(h, 'Ваша запись', 'Ждём вас в клинике 😊'),
+    hero(h, 'Ваша запись', 'Ждём вас в клинике 😊', me.profile),
     h('div', { class: 'booking-card' },
       h('p', { class: 'big' }, '📅 ', capitalize(`${whenText(b.startAt)}, в ${timeOf(b.startAt)}`)),
       h('div', {}, `${serviceEmoji(b.serviceName || '')} `, b.serviceName || 'Приём у стоматолога'),
@@ -98,7 +105,8 @@ function bookScreen(ui, me) {
     h('span', { class: 'ico', 'aria-hidden': 'true' }, serviceEmoji(s.name)),
     // Для скринридера — «Чистка · 60 мин» одной фразой; на экране длительность отдельной строкой
     s.name, h('span', { class: 'sr-only' }, ` · ${s.durationMinutes} мин`),
-    h('span', { class: 'dur', 'aria-hidden': 'true' }, `⏱ ${s.durationMinutes} мин`))));
+    h('span', { class: 'dur', 'aria-hidden': 'true' }, `⏱ ${s.durationMinutes} мин`),
+    priceText(s.priceSom) ? h('span', { class: 'price' }, priceText(s.priceSom)) : null)));
   }
 
   function drawDays() {
@@ -222,7 +230,7 @@ function bookScreen(ui, me) {
   }
 
   ui.render(h('section', { class: 'screen' },
-    hero(h, 'Запись к стоматологу', 'Выберите услугу и удобное время — врач подтвердит запись'),
+    hero(h, 'Запись к стоматологу', 'Выберите услугу и удобное время — врач подтвердит запись', me.profile),
     serviceBox,
     h('div', { class: 'field' }, h('span', {}, 'День'), dayBox),
     h('div', { class: 'field' }, h('span', {}, 'Время'), timeError, grid),

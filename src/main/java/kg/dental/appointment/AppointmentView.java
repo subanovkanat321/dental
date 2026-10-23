@@ -9,15 +9,16 @@ import kg.dental.patient.PatientView;
  *
  * @param source кто записал: DOCTOR или PATIENT (самозапись через бота)
  * @param serviceName услуга самозаписи, null — записал врач
+ * @param rating оценка пациента 1–5 после приёма, null — не оценивал
  */
 public record AppointmentView(long id, PatientView patient, Instant startAt, Instant endAt,
 		AppointmentStatus status, PatientReply reply, Instant reminderOpenedAt, long version,
-		Appointment.Source source, String serviceName) {
+		Appointment.Source source, String serviceName, Short rating) {
 
 	static AppointmentView of(Appointment a) {
 		return new AppointmentView(a.getId(), PatientView.of(a.getPatient()), a.getStartAt(), a.getEndAt(),
 				a.getStatus(), a.getReply(), a.getReminderOpenedAt(), a.getVersion(), a.getSource(),
-				a.getServiceType() == null ? null : a.getServiceType().getName());
+				a.getServiceType() == null ? null : a.getServiceType().getName(), a.getRating());
 	}
 
 }

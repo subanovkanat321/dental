@@ -66,6 +66,8 @@ services:
       NOTIFY_BEFORE_MINUTES: ${NOTIFY_BEFORE_MINUTES:-15}
       PATIENT_REMINDER_TIME: ${PATIENT_REMINDER_TIME:-18:00}
       AUTO_REMIND_PATIENTS: ${AUTO_REMIND_PATIENTS:-true}
+      REVIEW_TIME: ${REVIEW_TIME:-12:00}
+      ASK_REVIEWS: ${ASK_REVIEWS:-true}
       # Самозапись пациентов через бота: false — выключить
       PATIENT_BOOKING: ${PATIENT_BOOKING:-true}
     # Куча 75% = 384 МБ: хватает с запасом для 5–10 запросов в минуту

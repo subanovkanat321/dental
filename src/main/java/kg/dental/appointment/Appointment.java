@@ -56,6 +56,10 @@ public class Appointment {
 
 	private Instant reminderOpenedAt;
 
+	/** Оценка пациента 1–5 (V10). Ставит только ReviewQuery: JPA её не пишет и не затирает. */
+	@Column(insertable = false, updatable = false)
+	private Short rating;
+
 	/**
 	 * Оптимистическая блокировка (D18). Hibernate добавляет к UPDATE условие
 	 * {@code where version = ?} и увеличивает номер; если строку уже изменили, обновится
@@ -207,6 +211,10 @@ public class Appointment {
 
 	public AppointmentStatus getStatus() {
 		return status;
+	}
+
+	public Short getRating() {
+		return rating;
 	}
 
 	public PatientReply getReply() {

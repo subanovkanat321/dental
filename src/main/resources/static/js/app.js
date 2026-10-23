@@ -4,7 +4,7 @@ import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
   reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
-  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase, timeOffWhen,
+  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase, timeOffWhen, priceText, ratingsPhrase,
 } from './state.js';
 import { startPatient } from './patient.js';
 
@@ -60,7 +60,9 @@ const ICONS = {
   'Статистика неявок': '📊',
   'Услуги для самозаписи': '🦷',
   'Перерывы и выходные': '☕',
+  'Профиль врача': '🧑‍⚕️',
   'Записать снова': '➕',
+  'Записать на следующий визит': '➕',
   'Изменить имя или телефон': '✏️',
   'Поделиться номером': '📱',
   'Отменить запись': '✖️',
@@ -114,8 +116,10 @@ class ApiError extends Error {
 /** Каждый запрос несёт initData: по нему сервер узнаёт врача (InitDataAuthFilter). */
 async function api(method, path, body) {
   const headers = { Authorization: `tma ${initData}` };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const response = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  // FormData (загрузка фото) — как есть: браузер сам поставит multipart с границей
+  const form = body instanceof FormData;
+  if (body !== undefined && !form) headers['Content-Type'] = 'application/json';
+  const response = await fetch(path, { method, headers, body: body === undefined || form ? body : JSON.stringify(body) });
   if (response.status === 204) return null;
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new ApiError(response.status, data);
@@ -576,7 +580,13 @@ function cardScreen(a, notice) {
     actions.push(h('p', { class: 'hint' }, 'Восстановленный приём попросит напомнить пациенту заново.'),
       button('Восстановить', () => act('status', { status: 'SCHEDULED' }), 'btn primary'));
   } else if (a.status === 'DONE') {
-    actions.push(button('Исправить: не пришёл', () => act('status', { status: 'NO_SHOW' }, undoable('Отмечено: не пришёл')), 'btn danger'));
+    // Лечение часто в несколько визитов: сразу записать на следующий — через неделю, тот же пациент и длительность
+    actions.push(button('Записать на следующий визит', () => newScreen({
+      date: addDays(dateOf(a.startAt) > todayIn() ? dateOf(a.startAt) : todayIn(), 7),
+      duration: minutesBetween(a.startAt, a.endAt), patient: a.patient,
+    }), 'btn primary'));
+    actions.push(h('div', { class: 'danger-zone' },
+      button('Исправить: не пришёл', () => act('status', { status: 'NO_SHOW' }, undoable('Отмечено: не пришёл')), 'btn danger')));
   } else if (a.status === 'NO_SHOW') {
     actions.push(button('Исправить: пришёл', () => act('status', { status: 'DONE' })));
   }
@@ -590,6 +600,8 @@ function cardScreen(a, notice) {
     }, a.patient.fullName, ' ›'), h('br'), formatPhone(a.patient.phone)),
     h('p', { class: `tone-${state.tone}` }, `${state.icon} ${state.label}`),
     a.source === 'PATIENT' ? h('p', { class: 'hint' }, `Записался сам через бота${a.serviceName ? ` · ${a.serviceName}` : ''}`) : null,
+    a.rating ? h('p', { class: 'rating', 'aria-label': `Оценка пациента: ${a.rating} из 5` }, '⭐'.repeat(a.rating),
+      h('span', { class: 'hint' }, ` оценка пациента ${a.rating} из 5`)) : null,
     notice ? h('p', { class: 'hint' }, notice) : null,
     error,
     ...actions));
@@ -770,7 +782,111 @@ function menuScreen(back) {
     h('button', { type: 'button', class: 'btn', onclick: () => recallScreen(self) }, 'Позвать на профосмотр'),
     h('button', { type: 'button', class: 'btn', onclick: () => statsScreen(self) }, 'Статистика неявок'),
     h('button', { type: 'button', class: 'btn', onclick: () => servicesScreen(self) }, 'Услуги для самозаписи'),
-    h('button', { type: 'button', class: 'btn', onclick: () => timeOffScreen(self) }, 'Перерывы и выходные')));
+    h('button', { type: 'button', class: 'btn', onclick: () => timeOffScreen(self) }, 'Перерывы и выходные'),
+    h('button', { type: 'button', class: 'btn', onclick: () => profileScreen(self) }, 'Профиль врача')));
+}
+
+// ---------- Профиль врача ----------
+
+/**
+ * Уменьшить фото до 800 px по длинной стороне и сжать в JPEG — прямо в браузере. Фото с
+ * телефона весит 3–8 МБ; на сервер уходит ~150 КБ, и пациенты быстро грузят экран записи.
+ */
+function resizePhoto(file, max = 800) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('resize'))), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('not an image')); };
+    img.src = url;
+  });
+}
+
+/** Имя, пара слов о себе и фото — пациент видит их на экране записи вместо рисунка. */
+async function profileScreen(back) {
+  const id = ++screenId;
+  backButton.set(back);
+  mainButton.hide();
+  let profile;
+  try {
+    profile = await api('GET', '/api/profile');
+  } catch (e) {
+    if (id !== screenId || fatal(e)) return;
+    render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e))));
+    return;
+  }
+  if (id !== screenId) return;
+  const self = () => profileScreen(back);
+  const name = h('input', { type: 'text', maxLength: 100, value: profile.doctorName || '', placeholder: 'Например: Айгерим Садыкова' });
+  const about = h('textarea', { maxLength: 300, rows: 3, placeholder: 'Например: стоматолог-терапевт, 10 лет опыта' });
+  about.value = profile.about || '';
+  const errors = { doctorName: h('div', { class: 'error' }), about: h('div', { class: 'error' }), photo: h('div', { class: 'error' }) };
+  const error = h('div', { class: 'error', role: 'alert' });
+  const file = h('input', { type: 'file', accept: 'image/*', class: 'sr-only', id: 'photo-file' });
+  file.addEventListener('change', async () => {
+    const picked = file.files[0];
+    if (!picked) return;
+    errors.photo.textContent = 'Загружаем…';
+    try {
+      const form = new FormData();
+      form.append('photo', await resizePhoto(picked), 'photo.jpg');
+      await api('POST', '/api/profile/photo', form);
+      haptic('success');
+      self();
+    } catch (e) {
+      if (fatal(e)) return;
+      errors.photo.textContent = e instanceof ApiError ? (e.fields.photo || errorText(e)) : 'Не получилось открыть фото — выберите другое';
+    }
+  });
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Профиль врача'),
+    h('p', { class: 'hint' }, 'Пациенты видят это на экране записи через бота.'),
+    h('div', { class: 'profile-photo' },
+      profile.photoUrl ? h('img', { src: profile.photoUrl, alt: 'Фото врача' })
+        : h('div', { class: 'photo-empty', 'aria-hidden': 'true' }, '🧑‍⚕️'),
+      h('div', {},
+        h('label', { class: 'btn', for: 'photo-file' }, h('span', { class: 'ico', 'aria-hidden': 'true' }, '📷'),
+          profile.photoUrl ? 'Сменить фото' : 'Загрузить фото', file),
+        profile.photoUrl ? h('button', {
+          type: 'button', class: 'link danger-link',
+          onclick: async () => {
+            try {
+              await api('DELETE', '/api/profile/photo');
+              self();
+            } catch (e) {
+              if (!fatal(e)) errors.photo.textContent = errorText(e);
+            }
+          },
+        }, 'Удалить фото') : null)),
+    errors.photo,
+    h('label', { class: 'field' }, h('span', {}, 'Имя врача'), name, errors.doctorName),
+    h('label', { class: 'field' }, h('span', {}, 'О себе'), about, errors.about),
+    error));
+  mainButton.set('Сохранить', async () => {
+    Object.values(errors).forEach((e) => { e.textContent = ''; });
+    error.textContent = '';
+    mainButton.busy(true);
+    try {
+      await api('PUT', '/api/profile', { doctorName: name.value, about: about.value });
+      haptic('success');
+      toast('Сохранено');
+      back();
+    } catch (e) {
+      mainButton.busy(false);
+      if (fatal(e)) return;
+      const f = e instanceof ApiError ? e.fields : {};
+      errors.doctorName.textContent = f.doctorName || '';
+      errors.about.textContent = f.about || '';
+      if (!f.doctorName && !f.about) error.textContent = errorText(e);
+    }
+  });
 }
 
 // ---------- Перерывы и выходные ----------
@@ -911,7 +1027,8 @@ async function servicesScreen(back) {
     h('p', { class: 'hint' }, 'Их видят пациенты, когда записываются сами. Длительность — сколько времени займёт приём.'),
     ...list.map((s) => h('button', {
       type: 'button', class: 'btn', onclick: () => serviceEditScreen(s, self),
-    }, `${s.name} · ${s.durationMinutes} мин`, s.active ? null : h('span', { class: 'hint' }, ' · скрыта'))),
+    }, [s.name, `${s.durationMinutes} мин`, priceText(s.priceSom)].filter(Boolean).join(' · '),
+    s.active ? null : h('span', { class: 'hint' }, ' · скрыта'))),
     h('button', { type: 'button', class: 'btn primary', onclick: () => serviceEditScreen(null, self) }, '+ Добавить услугу')));
 }
 
@@ -920,19 +1037,24 @@ function serviceEditScreen(service, back) {
   backButton.set(back);
   const name = h('input', { type: 'text', value: service?.name || '', maxLength: 100 });
   const duration = h('input', { type: 'number', min: 15, max: 240, step: 15, value: service?.durationMinutes || 30 });
+  const price = h('input', { type: 'number', min: 0, step: 100, inputMode: 'numeric', value: service?.priceSom ?? '', placeholder: 'Не показывать' });
   const active = h('input', { type: 'checkbox', checked: service ? service.active : true, id: 'active' });
-  const errors = { name: h('div', { class: 'error' }), durationMinutes: h('div', { class: 'error' }) };
+  const errors = { name: h('div', { class: 'error' }), durationMinutes: h('div', { class: 'error' }), priceSom: h('div', { class: 'error' }) };
   const error = h('div', { class: 'error', role: 'alert' });
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, service ? 'Услуга' : 'Новая услуга'),
     h('label', { class: 'field' }, h('span', {}, 'Название'), name, errors.name),
     h('label', { class: 'field' }, h('span', {}, 'Длительность, мин'), duration, errors.durationMinutes),
+    h('label', { class: 'field' }, h('span', {}, 'Цена «от», сом'), price, errors.priceSom),
     service ? h('label', { class: 'consent', for: 'active' }, active, ' Показывать пациентам') : null,
     error));
   mainButton.set('Сохранить', async () => {
     Object.values(errors).forEach((e) => { e.textContent = ''; });
     error.textContent = '';
     mainButton.busy(true);
-    const body = { name: name.value, durationMinutes: Number(duration.value), active: active.checked };
+    const body = {
+      name: name.value, durationMinutes: Number(duration.value), active: active.checked,
+      priceSom: price.value === '' ? null : Number(price.value),
+    };
     try {
       await api(service ? 'PUT' : 'POST', service ? `/api/service-types/${service.id}` : '/api/service-types', body);
       haptic('success');
@@ -943,7 +1065,8 @@ function serviceEditScreen(service, back) {
       const f = e instanceof ApiError ? e.fields : {};
       errors.name.textContent = f.name || '';
       errors.durationMinutes.textContent = f.durationMinutes || '';
-      if (!f.name && !f.durationMinutes) error.textContent = errorText(e);
+      errors.priceSom.textContent = f.priceSom || '';
+      if (!f.name && !f.durationMinutes && !f.priceSom) error.textContent = errorText(e);
     }
   });
 }
@@ -1001,14 +1124,31 @@ async function recallScreen(back) {
 // ---------- Статистика ----------
 
 /** Неявки по неделям — ради этого проект: стало ли их меньше, чем 2–3 в неделю до приложения. */
+/** «⭐ 4,8 из 5 · 12 оценок за 90 дней» и полоски по звёздам. Оценок нет — подсказка, откуда они берутся. */
+function ratingsCard(r) {
+  if (!r.count) {
+    return h('div', { class: 'stat' }, h('strong', {}, '⭐ Оценки пациентов'),
+      h('div', { class: 'hint' }, 'На следующий день после приёма бот спросит оценку у тех, кто записывался через бота.'));
+  }
+  const max = Math.max(...r.byStars);
+  return h('div', { class: 'stat ratings' },
+    h('div', { class: 'ratings-head' }, h('span', { class: 'ratings-avg' }, `⭐ ${String(r.average).replace('.', ',')}`),
+      h('span', { class: 'hint' }, ` из 5 · ${ratingsPhrase(r.count)} за 90 дней`)),
+    [5, 4, 3, 2, 1].map((stars) => h('div', { class: 'ratings-row' },
+      h('span', { class: 'hint' }, `${stars} ⭐`),
+      h('span', { class: 'ratings-bar' }, h('span', { style: `width: ${max ? (r.byStars[stars - 1] / max) * 100 : 0}%` })),
+      h('span', { class: 'hint' }, String(r.byStars[stars - 1])))));
+}
+
 async function statsScreen(back) {
   const id = ++screenId;
   mainButton.hide();
   backButton.set(back);
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Статистика'), h('div', { class: 'skeleton' })));
   let weeks;
+  let ratings;
   try {
-    weeks = await api('GET', '/api/appointments/stats?weeks=8');
+    [weeks, ratings] = await Promise.all([api('GET', '/api/appointments/stats?weeks=8'), api('GET', '/api/appointments/ratings?days=90')]);
   } catch (e) {
     if (id !== screenId || fatal(e)) return;
     render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e),
@@ -1030,6 +1170,7 @@ async function statsScreen(back) {
       ]);
   };
   render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Статистика'),
+    ratingsCard(ratings),
     h('p', {}, average === null ? 'Через неделю здесь будет среднее неявок в неделю.'
       : `В среднем ${noShowsPhrase(average)} в неделю. До приложения было 2–3.`),
     // Неотмеченные портят цифры: не пришёл или пришёл — неизвестно

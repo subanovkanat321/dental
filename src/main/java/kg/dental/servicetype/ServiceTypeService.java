@@ -32,14 +32,14 @@ public class ServiceTypeService {
 	}
 
 	@Transactional
-	public ServiceTypeView create(String name, int durationMinutes) {
-		return ServiceTypeView.of(services.save(new ServiceType(name.strip(), durationMinutes, clock.instant())));
+	public ServiceTypeView create(String name, int durationMinutes, Integer priceSom) {
+		return ServiceTypeView.of(services.save(new ServiceType(name.strip(), durationMinutes, priceSom, clock.instant())));
 	}
 
 	@Transactional
-	public ServiceTypeView update(long id, String name, int durationMinutes, boolean active) {
+	public ServiceTypeView update(long id, String name, int durationMinutes, Integer priceSom, boolean active) {
 		var service = require(id);
-		service.update(name.strip(), durationMinutes, active);
+		service.update(name.strip(), durationMinutes, priceSom, active);
 		return ServiceTypeView.of(service);
 	}
 

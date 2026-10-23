@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  rowState, serviceEmoji, stripDays, recordsPhrase, breakNote, timeOffWhen, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
+  rowState, serviceEmoji, stripDays, recordsPhrase, breakNote, timeOffWhen, priceText, ratingsPhrase, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
   dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, bookingDays, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
@@ -216,4 +216,14 @@ test('timeOffWhen: каждую пятницу, каждый понедельн�
   assert.equal(timeOffWhen({ weekday: 'MONDAY', startTime: null }), 'Каждый понедельник · весь день');
   assert.equal(timeOffWhen({ weekday: null, firstDay: '2026-11-02', lastDay: '2026-11-08', startTime: null }), '2 нояб – 8 нояб · весь день');
   assert.equal(timeOffWhen({ weekday: null, firstDay: '2026-11-02', lastDay: '2026-11-02', startTime: '10:00:00', endTime: '11:00:00' }), '2 нояб · 10:00–11:00');
+});
+
+test('priceText: «от 2 000 сом», без цены — null', () => {
+  assert.equal(priceText(2000).replace(/\s/g, ' '), 'от 2 000 сом');
+  assert.equal(priceText(0), 'от 0 сом');
+  assert.equal(priceText(null), null);
+});
+
+test('ratingsPhrase: 1 оценка, 3 оценки, 12 оценок, 21 оценка', () => {
+  assert.deepEqual([1, 3, 12, 21].map(ratingsPhrase), ['1 оценка', '3 оценки', '12 оценок', '21 оценка']);
 });

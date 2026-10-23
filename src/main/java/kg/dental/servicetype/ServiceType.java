@@ -27,6 +27,9 @@ public class ServiceType {
 	@Column(nullable = false)
 	private boolean active;
 
+	/** Цена «от», целые сомы; null — не показывать. */
+	private Integer priceSom;
+
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -34,16 +37,18 @@ public class ServiceType {
 		// для JPA
 	}
 
-	ServiceType(String name, int durationMinutes, Instant createdAt) {
+	ServiceType(String name, int durationMinutes, Integer priceSom, Instant createdAt) {
 		this.name = name;
 		this.durationMinutes = durationMinutes;
+		this.priceSom = priceSom;
 		this.active = true;
 		this.createdAt = createdAt;
 	}
 
-	void update(String name, int durationMinutes, boolean active) {
+	void update(String name, int durationMinutes, Integer priceSom, boolean active) {
 		this.name = name;
 		this.durationMinutes = durationMinutes;
+		this.priceSom = priceSom;
 		this.active = active;
 	}
 
@@ -61,6 +66,10 @@ public class ServiceType {
 
 	public boolean isActive() {
 		return active;
+	}
+
+	public Integer getPriceSom() {
+		return priceSom;
 	}
 
 }

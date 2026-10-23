@@ -28,8 +28,11 @@ class ServiceTypeController {
 	record Request(@NotBlank(message = "Укажите название") @Size(max = 100, message = "Не длиннее 100 символов") String name,
 			@NotNull(message = DURATION_MESSAGE) @Min(value = 15, message = DURATION_MESSAGE)
 			@Max(value = 240, message = DURATION_MESSAGE) Integer durationMinutes,
-			Boolean active) {
+			Boolean active,
+			@Min(value = 0, message = PRICE_MESSAGE) @Max(value = 10_000_000, message = PRICE_MESSAGE) Integer priceSom) {
 	}
+
+	static final String PRICE_MESSAGE = "Цена — целое число сомов, без копеек";
 
 	private final ServiceTypeService service;
 
@@ -45,12 +48,13 @@ class ServiceTypeController {
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	ServiceTypeView create(@Valid @RequestBody Request request) {
-		return service.create(request.name(), request.durationMinutes());
+		return service.create(request.name(), request.durationMinutes(), request.priceSom());
 	}
 
 	@PutMapping("/{id}")
 	ServiceTypeView update(@PathVariable long id, @Valid @RequestBody Request request) {
-		return service.update(id, request.name(), request.durationMinutes(), request.active() == null || request.active());
+		return service.update(id, request.name(), request.durationMinutes(), request.priceSom(),
+				request.active() == null || request.active());
 	}
 
 }

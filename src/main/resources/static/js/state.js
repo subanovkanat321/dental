@@ -305,3 +305,18 @@ export function serviceEmoji(name) {
     ['осмотр', '🩺'], ['консульт', '🩺']];
   return map.find(([key]) => n.includes(key))?.[1] || '🦷';
 }
+
+/** «от 2 000 сом»; цены нет — null (не показываем). Деньги в API — целые сомы. */
+export function priceText(som) {
+  if (som === null || som === undefined) return null;
+  return `от ${new Intl.NumberFormat('ru-RU').format(som)} сом`;
+}
+
+/** «1 оценка», «3 оценки», «12 оценок». */
+export function ratingsPhrase(n) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  const word = mod10 === 1 && mod100 !== 11 ? 'оценка'
+    : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? 'оценки' : 'оценок';
+  return `${n} ${word}`;
+}

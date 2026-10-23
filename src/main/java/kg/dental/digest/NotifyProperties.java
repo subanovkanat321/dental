@@ -13,8 +13,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param patientReminderTime когда бот сам напоминает пациентам, записавшимся через бота, о завтрашнем
  * приёме (PATIENT_REMINDER_TIME) — раньше вечерней сводки, чтобы она их уже посчитала
  * @param patientReminders false — бот пациентам сам не напоминает (AUTO_REMIND_PATIENTS)
+ * @param reviewTime когда бот спрашивает оценку за вчерашний приём (REVIEW_TIME)
+ * @param reviews false — оценку не спрашивать (ASK_REVIEWS)
  */
 @ConfigurationProperties("dental.notify")
 public record NotifyProperties(LocalTime morningTime, LocalTime eveningTime, int beforeMinutes,
-		LocalTime patientReminderTime, boolean patientReminders) {
+		LocalTime patientReminderTime, boolean patientReminders, LocalTime reviewTime, boolean reviews) {
 }

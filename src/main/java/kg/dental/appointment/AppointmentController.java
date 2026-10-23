@@ -43,6 +43,12 @@ class AppointmentController {
 		return service.dayCounts(from, Math.clamp(days, 1, 62));
 	}
 
+	/** {@code /api/appointments/ratings?days=90}: оценки пациентов — в «Статистику». */
+	@GetMapping("/ratings")
+	RatingSummary ratings(@RequestParam(defaultValue = "90") int days) {
+		return service.ratings(Math.clamp(days, 1, 3650));
+	}
+
 	@GetMapping("/{id}")
 	AppointmentView get(@PathVariable long id) {
 		return service.get(id);

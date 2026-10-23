@@ -251,6 +251,7 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 .services > span { grid-column: 1 / -1; }
 .services .btn { flex-direction: column; align-items: flex-start; gap: 6px; min-height: 96px; margin: 0; padding: 12px; font-size: .92rem; font-weight: 600; }
 .services .dur { font-size: .82rem; font-weight: 500; color: var(--hint); }
+.services .price { font-size: .85rem; font-weight: 700; color: var(--accent); }
 
 /* Шапка экрана пациента: иллюстрация и приветствие */
 .hero {
@@ -291,3 +292,29 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 .time-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .time-pair .field { margin: 12px 0; }
 .screen > .segments { margin: 8px 0 4px; }
+
+/* Профиль врача */
+.profile-photo { display: flex; align-items: center; gap: 16px; margin: 12px 0; }
+.profile-photo > img, .photo-empty {
+  flex: 0 0 auto; width: 96px; height: 96px; border-radius: 50%; object-fit: cover;
+  box-shadow: 0 0 0 3px var(--card), 0 4px 14px rgba(0, 0, 0, .12);
+}
+.photo-empty { display: grid; place-items: center; font-size: 2.6rem; background: var(--accent-soft); }
+.profile-photo > div { flex: 1; }
+.profile-photo .btn { margin: 0 0 4px; }
+.field textarea {
+  width: 100%; padding: 10px 14px; font: inherit; color: var(--text); resize: vertical;
+  background: var(--card); border: 1px solid var(--separator); border-radius: 12px; box-shadow: var(--shadow);
+}
+.field textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.hero img.hero-photo { border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 3px rgba(255, 255, 255, .7); }
+.hero-doctor { font-weight: 700; font-size: .98rem; margin-bottom: 2px; }
+
+/* Оценки пациентов */
+.ratings-head { margin-bottom: 8px; }
+.ratings-avg { font-size: 1.5rem; font-weight: 700; }
+.ratings-row { display: grid; grid-template-columns: 40px 1fr 28px; align-items: center; gap: 8px; margin: 4px 0; font-size: .85rem; }
+.ratings-bar { height: 8px; border-radius: 4px; background: var(--page); overflow: hidden; }
+.ratings-bar > span { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #f5b301, #ffcf40); }
+.ratings-row > span:last-child { text-align: right; }
+.rating { margin: 6px 0; font-size: 1.1rem; }

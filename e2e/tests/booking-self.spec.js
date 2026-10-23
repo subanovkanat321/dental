@@ -75,7 +75,7 @@ test('врач добавляет услугу — пациент видит е�
   await doctor.getByRole('button', { name: 'Услуги для самозаписи' }).click();
   await doctor.getByRole('button', { name: '+ Добавить услугу' }).click();
   await doctor.locator('input[type=text]').fill('Имплантация');
-  await doctor.locator('input[type=number]').fill('120');
+  await doctor.locator('input[type=number]').first().fill('120');
   await pressMainButton(doctor);
   await expect(doctor.getByRole('button', { name: 'Имплантация · 120 мин' })).toBeVisible();
 

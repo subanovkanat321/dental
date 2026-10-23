@@ -6,6 +6,7 @@ import java.util.List;
 import kg.dental.appointment.AppointmentStatus;
 import kg.dental.appointment.AppointmentView;
 import kg.dental.appointment.SlotsView;
+import kg.dental.profile.ProfileView;
 import kg.dental.servicetype.ServiceTypeView;
 
 /** Ответы API самозаписи. Пациент видит только своё: ни чужих имён, ни расписания целиком. */
@@ -30,7 +31,7 @@ final class BookingViews {
 	 * @param phone номер, которым человек поделился; null — ещё не делился
 	 */
 	record Me(boolean doctor, boolean bookingEnabled, String fullName, String phone, Booking booking,
-			List<ServiceTypeView> services, String clinicContact, int daysAhead) {
+			List<ServiceTypeView> services, String clinicContact, int daysAhead, ProfileView profile) {
 	}
 
 	/**
