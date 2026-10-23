@@ -42,8 +42,11 @@ test('напоминание в Telegram: сервер отправил — «Ж
 
   await page.getByRole('button', { name: 'Напомнить в Telegram' }).click();
 
-  await expect(page.locator('#toast')).toContainText('Напоминание отправлено в Telegram');
+  // Заметно: зелёная плашка сверху с именем, в карточке — когда напомнили
+  await expect(page.locator('#toast')).toHaveText('✅ Отправлено в Telegram: Бакыт Маматов');
+  await expect(page.locator('#toast')).toHaveClass('toast-ok');
   await expect(page.getByText('Ждём ответа')).toBeVisible();
+  await expect(page.locator('.sent-note')).toHaveText(/^🔔 Напоминание отправлено сегодня в \d\d:\d\d$/);
   expect(await calls(page)).toEqual([]);
 });
 
@@ -54,6 +57,10 @@ test('не доставлено — ошибка, отметки нет', async 
   await page.getByRole('button', { name: 'Напомнить в Telegram' }).click();
 
   await expect(page.locator('#toast')).toContainText('Бот не настроен на сервере');
+  await expect(page.locator('#toast')).toHaveClass('toast-bad');
+  // Кнопка снова доступна — можно повторить или напомнить в WhatsApp
+  await expect(page.getByRole('button', { name: 'Напомнить в Telegram' })).toBeEnabled();
+  await expect(page.locator('.sent-note')).toHaveCount(0);
   await expect(page.getByText('Не напомнили')).toBeVisible();
   expect((await db.query('select reminder_opened_at from appointment')).rows[0].reminder_opened_at).toBeNull();
 });
@@ -84,4 +91,28 @@ test('страница звонка: кнопка с номером и ссыл�
   await page.goto('/call.html#996555123456', { waitUntil: 'commit' });
 
   await expect(page.getByRole('link', { name: 'Позвонить +996 555 123 456' })).toHaveAttribute('href', 'tel:+996555123456');
+});
+
+test('пока отправляется — «Отправляем…», второе нажатие не шлёт второе сообщение', async ({ page }) => {
+  const id = await addAppointment(await botPatient(), tomorrow(), '10:00');
+  await openApp(page, { path: `/?appointment=${id}` });
+  let requests = 0;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  await page.route(`**/api/appointments/${id}/remind-telegram`, async (route) => {
+    requests += 1;
+    await gate;
+    await db.query('update appointment set reminder_opened_at = now() where id = $1', [id]);
+    const real = await route.fetch({ url: route.request().url().replace('/remind-telegram', ''), method: 'GET' });
+    await route.fulfill({ response: real });
+  });
+
+  await page.getByRole('button', { name: 'Напомнить в Telegram' }).click();
+  const sending = page.getByRole('button', { name: '⏳ Отправляем…' });
+  await expect(sending).toBeDisabled();
+  await sending.click({ force: true });
+  release();
+
+  await expect(page.locator('#toast')).toHaveClass('toast-ok');
+  expect(requests).toBe(1);
 });

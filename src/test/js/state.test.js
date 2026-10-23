@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  rowState, serviceEmoji, stripDays, recordsPhrase, breakNote, timeOffWhen, priceText, ratingsPhrase, initials, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
+  rowState, serviceEmoji, stripDays, recordsPhrase, breakNote, timeOffWhen, priceText, ratingsPhrase, initials, sentText, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
   dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, bookingDays, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
@@ -240,4 +240,11 @@ test('fitsWindow с врачом: к другому врачу — не канд
   // Записан к другому врачу позже — всё равно кандидат: в это окно будет новая запись
   assert.equal(fitsWindow({ durationMinutes: 30, doctorId: null, upcoming: { doctorId: 2, startAt: '2026-10-20T04:00:00Z' } }, window, 1), true);
   assert.equal(fitsWindow({ durationMinutes: 30, doctorId: 1, upcoming: { doctorId: 1, startAt: '2026-10-20T04:00:00Z' } }, window, 1), false);
+});
+
+test('sentText: сегодня, вчера, дата — по Бишкеку', () => {
+  const now = new Date('2026-10-23T12:00:00Z'); // 18:00 по Бишкеку
+  assert.equal(sentText('2026-10-23T12:05:00Z', now), 'сегодня в 18:05');
+  assert.equal(sentText('2026-10-22T12:05:00Z', now), 'вчера в 18:05');
+  assert.equal(sentText('2026-10-20T04:00:00Z', now), '20 окт в 10:00');
 });

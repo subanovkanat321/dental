@@ -329,3 +329,13 @@ export function ratingsPhrase(n) {
 export function initials(name) {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('');
 }
+
+/** Когда напомнили: «сегодня в 18:05», «вчера в 18:05», «21 окт в 18:05» — по Бишкеку. */
+export function sentText(instant, now = new Date()) {
+  const day = dateOf(instant);
+  const today = todayIn(now);
+  const when = day === today ? 'сегодня' : day === addDays(today, -1) ? 'вчера'
+    : new Intl.DateTimeFormat('ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'short' })
+      .format(new Date(`${day}T00:00:00Z`)).replace('.', '');
+  return `${when} в ${timeOf(instant)}`;
+}

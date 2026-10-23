@@ -4,7 +4,7 @@ import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
   reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
-  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase, timeOffWhen, priceText, ratingsPhrase, initials,
+  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase, timeOffWhen, priceText, ratingsPhrase, initials, sentText,
 } from './state.js';
 import { startPatient } from './patient.js';
 
@@ -224,13 +224,19 @@ function haptic(type) {
 
 let toastTimer;
 /** Плашка внизу: «Отменено · Вернуть» на 5 с (DD7). */
-function toast(text, actionText, action) {
+/**
+ * Плашка: «Отменено · Вернуть» внизу на 5 с (DD7). tone 'ok' / 'bad' — итог отправки: заметная,
+ * сверху экрана, зелёная или красная, — чтобы было видно, дошло сообщение или нет.
+ */
+function toast(text, actionText, action, tone = '') {
   const el = document.getElementById('toast');
   clearTimeout(toastTimer);
-  el.replaceChildren(h('span', {}, text), actionText ? h('button', {
+  el.className = tone ? `toast-${tone}` : '';
+  // Без кнопки — только текст: replaceChildren(null) вставил бы слово «null»
+  el.replaceChildren(...[h('span', {}, text), actionText ? h('button', {
     type: 'button',
     onclick: () => { el.hidden = true; action(); },
-  }, actionText) : null);
+  }, actionText) : null].filter(Boolean));
   el.hidden = false;
   toastTimer = setTimeout(() => { el.hidden = true; }, 5000);
 }
@@ -308,19 +314,31 @@ function remind(a, onChange) {
  */
 const sending = new Set(); // id, по которым напоминание в Telegram уже отправляется: двойное нажатие — одно сообщение
 
-async function remindTelegram(a, onChange) {
+async function remindTelegram(a, onChange, button) {
   if (sending.has(a.id)) return;
   sending.add(a.id);
   pressed.add(a.id);
+  // Пока сервер отправляет (около секунды) — видно, что кнопка нажата
+  const label = button ? [...button.childNodes] : [];
+  if (button) {
+    button.disabled = true;
+    button.classList.add('sending');
+    if (!button.classList.contains('wa')) button.replaceChildren('⏳ Отправляем…');
+  }
   try {
     Object.assign(a, await api('POST', `/api/appointments/${a.id}/remind-telegram`));
     haptic('success');
-    toast('Напоминание отправлено в Telegram');
+    toast(`✅ Отправлено в Telegram: ${a.patient.fullName}`, null, null, 'ok');
   } catch (e) {
     if (fatal(e)) return;
     pressed.delete(a.id);
     haptic('error');
-    toast(errorText(e));
+    toast(`⚠️ ${errorText(e)}`, null, null, 'bad');
+    if (button) {
+      button.disabled = false;
+      button.classList.remove('sending');
+      if (!button.classList.contains('wa')) button.replaceChildren(...label);
+    }
   } finally {
     sending.delete(a.id);
   }
@@ -328,8 +346,8 @@ async function remindTelegram(a, onChange) {
 }
 
 /** Быстрая кнопка в строке и «Напомнить следующему»: записавшимся через бота — в бот, остальным — WhatsApp. */
-function remindBest(a, onChange) {
-  if (a.patient.telegram) remindTelegram(a, onChange);
+function remindBest(a, onChange, button) {
+  if (a.patient.telegram) remindTelegram(a, onChange, button);
   else remind(a, onChange);
 }
 
@@ -452,7 +470,11 @@ async function dayScreen(date, flashId) {
     const nextUp = isTomorrow ? nextToRemind(appointments, pressed, now) : null;
     if (nextUp) {
       mainButton.set(`Напомнить следующему (${short(nextUp.patient.fullName)}, ${timeOf(nextUp.startAt)})`,
-        () => remindBest(nextUp, draw));
+        () => {
+          // Telegram — запрос к серверу: главная кнопка с «часиками», пока он идёт
+          if (nextUp.patient.telegram) mainButton.busy(true);
+          Promise.resolve(remindBest(nextUp, draw)).finally(() => mainButton.busy(false));
+        });
     } else {
       mainButton.set('Новая запись', () => newScreen({ date }));
     }
@@ -518,7 +540,7 @@ function row(a, isNext, flash, now, redraw) {
         a.reminderOpenedAt = a.reminderOpenedAt || new Date().toISOString();
         redraw();
       } else {
-        remindBest(a, redraw);
+        remindBest(a, redraw, e.currentTarget);
       }
     },
   }, failed ? '↻' : [svgIcon(viaBot ? PLANE_ICON : CHAT_ICON, viaBot), h('span', { class: 'sr-only' }, viaBot ? 'TG' : 'WA')]) : null;
@@ -600,7 +622,7 @@ function cardScreen(a, notice) {
     if (canRemind(a)) {
       // Как связаться — выбирает врач: бот (если пациент записывался через него), WhatsApp или звонок
       actions.unshift(
-        a.patient.telegram ? button('Напомнить в Telegram', () => remindTelegram(a, refresh), 'btn primary') : null,
+        a.patient.telegram ? button('Напомнить в Telegram', (e) => remindTelegram(a, refresh, e.currentTarget), 'btn primary') : null,
         button('Напомнить в WhatsApp', () => remind(a, refresh), a.patient.telegram ? 'btn' : 'btn primary'),
         callButton(a.patient.phone),
       );
@@ -636,6 +658,9 @@ function cardScreen(a, notice) {
     }, a.patient.fullName, ' ›'), h('br'), formatPhone(a.patient.phone)),
     h('p', { class: `tone-${state.tone}` }, `${state.icon} ${state.label}`),
     a.source === 'PATIENT' ? h('p', { class: 'hint' }, `Записался сам через бота${a.serviceName ? ` · ${a.serviceName}` : ''}`) : null,
+    // Напоминали ли — видно и потом, а не только в плашке после нажатия
+    a.reminderOpenedAt && a.status === 'SCHEDULED'
+      ? h('p', { class: 'sent-note' }, `🔔 Напоминание отправлено ${sentText(a.reminderOpenedAt)}`) : null,
     a.rating ? h('p', { class: 'rating', 'aria-label': `Оценка пациента: ${a.rating} из 5` }, '⭐'.repeat(a.rating),
       h('span', { class: 'hint' }, ` оценка пациента ${a.rating} из 5`)) : null,
     notice ? h('p', { class: 'hint' }, notice) : null,

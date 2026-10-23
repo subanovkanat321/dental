@@ -276,6 +276,18 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); animation: toast-in .2s ease;
 }
 #toast button { border: 0; background: none; color: #5eead4; font-weight: 700; min-height: 44px; cursor: pointer; }
+/* Итог отправки — сверху, крупно, зелёный или красный: не пропустить */
+#toast.toast-ok, #toast.toast-bad {
+  top: calc(12px + env(safe-area-inset-top)); bottom: auto; padding: 14px 16px; font-weight: 600; font-size: 1rem;
+  animation: toast-drop .25s ease;
+}
+#toast.toast-ok { background: #15803d; }
+#toast.toast-bad { background: #c2410c; }
+@keyframes toast-drop { from { transform: translateY(-16px); opacity: 0; } }
+.sent-note { margin: 4px 0; padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); font-size: .92rem; }
+.btn.sending { opacity: .75; }
+.wa.sending { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(.9); opacity: .7; } }
 @keyframes toast-in { from { transform: translateY(12px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 .slots > .hint { grid-column: 1 / -1; }
