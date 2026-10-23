@@ -1956,13 +1956,13 @@ async function start() {
   if (tg) {
     tg.ready();
     tg.expand();
+    // Всегда светлое оформление (app.css): тёмную тему Telegram не перенимаем
     const applyScheme = () => {
-      document.documentElement.classList.toggle('dark', tg.colorScheme === 'dark');
       // Шапка и главная кнопка Telegram — в цвет приложения, а не синие по умолчанию
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
       try {
-        tg.setHeaderColor?.('secondary_bg_color');
-        tg.setBackgroundColor?.('secondary_bg_color');
+        tg.setHeaderColor?.('#f4fafb');
+        tg.setBackgroundColor?.('#f4fafb');
         tg.MainButton.setParams({ color: accent, text_color: '#ffffff' });
       } catch {
         // старый Telegram без этих методов — остаются его цвета

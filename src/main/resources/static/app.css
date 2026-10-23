@@ -1,32 +1,25 @@
 /*
- * Дизайн: страница — серый фон темы Telegram, на нём белые карточки со скруглением и мягкой
- * тенью (как в iOS). Фоны и текст — из темы Telegram (DD8), поэтому светлая и тёмная темы
- * работают сами. Свой — только бирюзовый «медицинский» акцент и цвета статусов (DD9).
+ * Дизайн: светлый, «белые зубы» — белые карточки на почти белом мятном фоне, светлая бирюза.
+ * Всегда светлый, даже при тёмной теме Telegram: так решил владелец — стоматология должна
+ * выглядеть чистой и светлой. Свои цвета, а не темы Telegram; статусы — свои (DD9).
  */
 :root {
-  --page: var(--tg-theme-secondary-bg-color, #f2f3f7);
-  --card: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #fff));
-  --text: var(--tg-theme-text-color, #111827);
-  --hint: var(--tg-theme-hint-color, #8a8f98);
-  --link: var(--tg-theme-link-color, #0e9f94);
-  --separator: var(--tg-theme-section-separator-color, #e5e7eb);
-  --destructive: var(--tg-theme-destructive-text-color, #e5484d);
-  --accent: #0e9f94;
-  --accent-2: #14b8c9;
+  color-scheme: light;
+  --page: #f4fafb;
+  --card: #ffffff;
+  --text: #13303b;
+  --hint: #6f8893;
+  --link: #0c9c90;
+  --separator: #e3eef0;
+  --destructive: #e5484d;
+  --accent: #12a99b;
+  --accent-2: #3cbfdc;
   --accent-text: #fff;
-  --accent-soft: rgba(14, 159, 148, .12);
+  --accent-soft: rgba(18, 169, 155, .10);
   --status-ok: #15803d;
   --status-wait: #b45309;
-  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 2px 8px rgba(16, 24, 40, .06);
-  --radius: 16px;
-}
-.dark {
-  --accent: #2cc4b4;
-  --accent-2: #2aa9d6;
-  --accent-soft: rgba(44, 196, 180, .16);
-  --status-ok: #4cc27a;
-  --status-wait: #f0b44c;
-  --shadow: none;
+  --shadow: 0 1px 2px rgba(19, 48, 59, .04), 0 4px 14px rgba(19, 48, 59, .06);
+  --radius: 18px;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -255,13 +248,15 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 
 /* Шапка экрана пациента: иллюстрация и приветствие */
 .hero {
-  display: flex; align-items: center; gap: 14px; margin: -4px 0 8px; padding: 18px 16px; border-radius: 20px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 30%, transparent);
+  display: flex; align-items: center; gap: 14px; margin: -4px 0 8px; padding: 18px 16px; border-radius: 22px;
+  background: linear-gradient(135deg, #e3f7f4 0%, #eaf6fd 100%); color: var(--text);
+  border: 1px solid #d6efec; box-shadow: var(--shadow);
 }
+.hero img:not(.hero-photo) { filter: drop-shadow(0 4px 8px rgba(18, 169, 155, .25)); }
 .hero img { flex: 0 0 auto; width: 72px; height: 72px; }
-.hero h1 { margin: 0 0 4px; font-size: 1.35rem; color: #fff; }
-.hero p { margin: 0; font-size: .92rem; opacity: .92; }
+.hero h1 { margin: 0 0 4px; font-size: 1.35rem; color: var(--text); }
+.hero p { margin: 0; font-size: .92rem; color: var(--hint); }
+.hero-doctor { color: var(--link); }
 .booking-card { padding: 18px; background: var(--card); border-radius: 20px; box-shadow: var(--shadow); }
 
 #main-button-fallback { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--page) 90%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
@@ -319,7 +314,7 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
   background: var(--card); border: 1px solid var(--separator); border-radius: 12px; box-shadow: var(--shadow);
 }
 .field textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.hero img.hero-photo { border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 3px rgba(255, 255, 255, .7); }
+.hero img.hero-photo { border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 3px #fff, 0 4px 12px rgba(19, 48, 59, .12); }
 .hero-doctor { font-weight: 700; font-size: .98rem; margin-bottom: 2px; }
 
 /* Оценки пациентов */
