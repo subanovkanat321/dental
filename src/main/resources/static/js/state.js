@@ -237,6 +237,38 @@ export function bookingDays(today, n) {
   });
 }
 
+/**
+ * Лента дней в шапке «Дня»: n дней с сегодняшнего; если выбранный день вне ленты (прошлое или
+ * дальше n дней) — лента с него, начиная за 3 дня до, чтобы было видно соседей.
+ */
+export function stripDays(date, today, n = 21) {
+  const inStrip = date >= today && date < addDays(today, n);
+  const start = inStrip ? today : addDays(date, -3);
+  const fmt = (opts, d) => new Intl.DateTimeFormat('ru-RU', { timeZone: 'UTC', ...opts })
+    .format(new Date(`${d}T00:00:00Z`)).replace('.', '');
+  return Array.from({ length: n }, (_, i) => {
+    const d = addDays(start, i);
+    const weekday = new Date(`${d}T00:00:00Z`).getUTCDay();
+    return {
+      date: d,
+      weekday: fmt({ weekday: 'short' }, d).replace(/^./, (c) => c.toUpperCase()),
+      day: Number(d.slice(8)),
+      month: fmt({ month: 'short' }, d),
+      today: d === today,
+      weekend: weekday === 0 || weekday === 6,
+    };
+  });
+}
+
+/** «3 записи», «1 запись», «5 записей» — для подписи дня в ленте. */
+export function recordsPhrase(n) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  const word = mod10 === 1 && mod100 !== 11 ? 'запись'
+    : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? 'записи' : 'записей';
+  return `${n} ${word}`;
+}
+
 /** Эмодзи услуги по названию — для плиток самозаписи; незнакомая услуга — зуб. */
 export function serviceEmoji(name) {
   const n = name.toLowerCase();

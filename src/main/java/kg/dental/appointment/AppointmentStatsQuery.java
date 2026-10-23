@@ -27,6 +27,27 @@ class AppointmentStatsQuery {
 		this.jdbc = jdbc;
 	}
 
+	/** Приёмы по дням с {@code from} на {@code days} дней вперёд (по Бишкеку); пустые дни — нулями. */
+	List<DayCount> days(LocalDate from, int days, ZoneId zone) {
+		var to = from.plusDays(days);
+		var byDay = new HashMap<LocalDate, DayCount>();
+		jdbc.sql("""
+				select (start_at at time zone :zone)::date as day,
+				       count(*) filter (where status <> 'CANCELLED') as booked,
+				       count(*) filter (where status = 'REQUESTED') as requested
+				from appointment
+				where start_at >= :from and start_at < :to
+				group by 1""")
+			.param("zone", zone.getId())
+			.param("from", Timestamp.from(from.atStartOfDay(zone).toInstant()))
+			.param("to", Timestamp.from(to.atStartOfDay(zone).toInstant()))
+			.query((rs, n) -> new DayCount(rs.getObject("day", LocalDate.class), rs.getLong("booked"),
+					rs.getLong("requested")))
+			.list()
+			.forEach(c -> byDay.put(c.date(), c));
+		return from.datesUntil(to).map(d -> byDay.getOrDefault(d, new DayCount(d, 0, 0))).toList();
+	}
+
 	/** Последние {@code weeks} недель по Бишкеку, текущая первой; недели без приёмов — нулями. */
 	List<WeekStats> weeks(int weeks, Instant now, ZoneId zone) {
 		var thisWeek = LocalDate.ofInstant(now, zone).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));

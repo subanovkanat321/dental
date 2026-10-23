@@ -111,6 +111,11 @@ public class AppointmentService {
 
 	/** Приёмы календарного дня по Бишкеку, включая отменённые (в «Дне» они зачёркнуты). */
 	@Transactional(readOnly = true)
+	public List<DayCount> dayCounts(LocalDate from, int days) {
+		return stats.days(from, days, properties.timeZone());
+	}
+
+	@Transactional(readOnly = true)
 	public List<AppointmentView> day(LocalDate date) {
 		var zone = properties.timeZone();
 		var from = date.atStartOfDay(zone).toInstant();

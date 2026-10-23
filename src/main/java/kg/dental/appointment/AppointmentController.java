@@ -36,6 +36,13 @@ class AppointmentController {
 		return service.day(date);
 	}
 
+	/** {@code /api/appointments/counts?from=2027-06-01&days=21}: сколько приёмов в каждый день — для ленты дней. */
+	@GetMapping("/counts")
+	List<DayCount> counts(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+			@RequestParam(defaultValue = "21") int days) {
+		return service.dayCounts(from, Math.clamp(days, 1, 62));
+	}
+
 	@GetMapping("/{id}")
 	AppointmentView get(@PathVariable long id) {
 		return service.get(id);

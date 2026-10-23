@@ -72,6 +72,36 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
   font-weight: 600; font-size: .94rem; white-space: nowrap; cursor: pointer;
 }
 .segments button[aria-pressed=true] { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-text); }
+/* Лента дней: листается пальцем вправо, выбранный день — бирюзовый, число записей — кружком */
+.strip {
+  display: flex; gap: 6px; margin: 10px -12px 0; padding: 4px 12px 6px; overflow-x: auto;
+  scroll-snap-type: x proximity; scrollbar-width: none;
+}
+.strip::-webkit-scrollbar { display: none; }
+.strip-day {
+  position: relative; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 54px; height: 64px; padding: 0 6px; border: 0; border-radius: 14px;
+  background: var(--card); box-shadow: var(--shadow); scroll-snap-align: center; cursor: pointer;
+}
+.strip-day .wd { font-size: .72rem; font-weight: 600; color: var(--hint); text-transform: capitalize; }
+.strip-day .dn { font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
+.strip-day.weekend .wd { color: var(--destructive); }
+.strip-day.today .wd { color: var(--accent); }
+.strip-day[aria-pressed=true] { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-text); }
+.strip-day[aria-pressed=true] .wd { color: var(--accent-text); opacity: .9; }
+.strip-day .badge {
+  position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: .72rem; font-weight: 700; line-height: 20px; text-align: center;
+  box-shadow: 0 0 0 2px var(--page);
+}
+.strip-day .badge:empty { display: none; }
+.strip-day .badge.requested { background: var(--status-wait); }
+.strip-day[aria-pressed=true] .badge { background: #fff; color: var(--accent); }
+.segments .pick-date {
+  position: relative; flex: 1; display: grid; place-items: center; min-height: 38px; border-radius: 9px;
+  font-weight: 600; font-size: .94rem; white-space: nowrap; cursor: pointer;
+}
+.segments .pick-date input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .day-note { margin-top: 8px; font-size: .88rem; text-align: center; }
 
 /* ---------- Строки «Дня» (DD1): карточка на приём ---------- */

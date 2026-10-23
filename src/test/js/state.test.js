@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  rowState, serviceEmoji, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
+  rowState, serviceEmoji, stripDays, recordsPhrase, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
   dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, bookingDays, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
@@ -187,4 +187,20 @@ test('serviceEmoji: по ключевому слову, незнакомая —
   assert.equal(serviceEmoji('Профессиональная чистка'), '✨');
   assert.equal(serviceEmoji('Осмотр и консультация'), '🩺');
   assert.equal(serviceEmoji('Что-то новое'), '🦷');
+});
+
+test('stripDays: с сегодняшнего; дата вне ленты — лента с неё минус 3 дня', () => {
+  const days = stripDays('2026-10-25', '2026-10-23', 21);
+  assert.equal(days.length, 21);
+  assert.equal(days[0].date, '2026-10-23');
+  assert.equal(days[0].today, true);
+  assert.equal(days[1].weekday, 'Сб');
+  assert.equal(days[1].weekend, true);
+  assert.equal(days[3].day, 26);
+  assert.equal(stripDays('2026-12-31', '2026-10-23')[0].date, '2026-12-28');
+  assert.equal(stripDays('2026-10-20', '2026-10-23')[0].date, '2026-10-17');
+});
+
+test('recordsPhrase: 1 запись, 3 записи, 5 записей, 11 записей, 22 записи', () => {
+  assert.deepEqual([1, 3, 5, 11, 22].map(recordsPhrase), ['1 запись', '3 записи', '5 записей', '11 записей', '22 записи']);
 });

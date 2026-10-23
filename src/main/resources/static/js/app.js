@@ -4,7 +4,7 @@ import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
   reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
-  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText,
+  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase,
 } from './state.js';
 import { startPatient } from './patient.js';
 
@@ -334,17 +334,43 @@ async function dayScreen(date, flashId) {
     type: 'date', value: date, 'aria-label': 'Выбрать дату',
     onchange: (e) => e.target.value && dayScreen(e.target.value),
   });
+  // Лента дней: листается вправо; число — сколько записей, оранжевое — есть заявки
+  const days = stripDays(date, today);
+  const chips = days.map((d) => h('button', {
+    type: 'button', class: `strip-day${d.today ? ' today' : ''}${d.weekend ? ' weekend' : ''}`,
+    'aria-pressed': String(d.date === date), 'aria-label': `${d.weekday}, ${d.day} ${d.month}`,
+    onclick: () => dayScreen(d.date),
+  }, h('span', { class: 'wd' }, d.today ? 'Сегодня' : d.weekday), h('span', { class: 'dn' }, String(d.day)),
+  h('span', { class: 'badge', 'aria-hidden': 'true' })));
+  const strip = h('div', { class: 'strip', role: 'group', 'aria-label': 'Дни' }, chips);
   const head = h('header', { class: 'day-head' },
     h('div', { class: 'day-title' },
       h('button', { type: 'button', class: 'arrow', 'aria-label': 'Предыдущий день', onclick: () => dayScreen(addDays(date, -1)) }, '‹'),
       h('label', {}, h('h1', {}, dayTitle(date)), dateInput),
       h('button', { type: 'button', class: 'arrow', 'aria-label': 'Следующий день', onclick: () => dayScreen(addDays(date, 1)) }, '›')),
+    strip,
     h('div', { class: 'segments' },
       h('button', { type: 'button', 'aria-pressed': String(date === today), onclick: () => dayScreen(today) }, 'Сегодня'),
-      h('button', { type: 'button', 'aria-pressed': String(date === addDays(today, 1)), onclick: () => dayScreen(addDays(today, 1)) }, 'Завтра'),
+      // Невидимое поле даты поверх кнопки: нажатие сразу открывает системный календарь (и на iPhone)
+      h('label', { class: 'pick-date' }, '📅 Дата', h('input', {
+        type: 'date', value: date, 'aria-label': 'Выбрать дату',
+        onchange: (e) => e.target.value && dayScreen(e.target.value),
+      })),
       h('button', { type: 'button', onclick: () => menuScreen(() => dayScreen(date)) }, 'Меню')));
 
   render(head, ...Array.from({ length: 6 }, () => h('div', { class: 'skeleton' })));
+  chips[days.findIndex((d) => d.date === date)]?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  // Числа в ленте — отдельным запросом: не нужны, чтобы показать день, и не держат его
+  api('GET', `/api/appointments/counts?from=${days[0].date}&days=${days.length}`).then((counts) => {
+    if (id !== screenId) return;
+    counts.forEach((c, i) => {
+      if (!chips[i] || !c.booked) return;
+      const badge = chips[i].querySelector('.badge');
+      badge.textContent = String(c.booked);
+      badge.classList.toggle('requested', c.requested > 0);
+      chips[i].setAttribute('aria-label', `${chips[i].getAttribute('aria-label')}: ${recordsPhrase(c.booked)}`);
+    });
+  }).catch(() => {});
 
   let appointments;
   let slots;

@@ -380,6 +380,23 @@ class AppointmentApiTests {
 		json.extractingPath("$[0].patient.fullName").isEqualTo("Тестовый пациент");
 	}
 
+	@Test
+	void countsPerBishkekDayWithoutCancelledAndEmptyDaysAsZero() {
+		create("2099-05-31T17:30:00Z", 30); // 31 мая 23:30 по Бишкеку
+		create("2099-05-31T18:00:00Z", 30); // 1 июня 00:00
+		create(FUTURE, 30); // 1 июня 10:00
+		var cancelled = id(create("2099-06-01T06:00:00Z", 30));
+		post(cancelled, "status", """
+				{"version": 0, "status": "CANCELLED"}""");
+		jdbc.update("update appointment set status = 'REQUESTED' where start_at = '2099-05-31T18:00:00Z'");
+
+		var json = assertThat(mvc.get().uri("/api/appointments/counts?from=2099-05-31&days=3")
+			.header(HttpHeaders.AUTHORIZATION, TestInitData.doctor())).hasStatusOk().bodyJson();
+		json.extractingPath("$[*].date").asArray().containsExactly("2099-05-31", "2099-06-01", "2099-06-02");
+		json.extractingPath("$[*].booked").asArray().containsExactly(1, 2, 0);
+		json.extractingPath("$[*].requested").asArray().containsExactly(0, 1, 0);
+	}
+
 	private MvcTestResult create(String startAt, int durationMinutes) {
 		return mvc.post().uri("/api/appointments").contentType(MediaType.APPLICATION_JSON).content("""
 				{"patientId": %d, "startAt": "%s", "durationMinutes": %d}"""
