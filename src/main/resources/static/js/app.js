@@ -73,12 +73,12 @@ const ICONS = {
   'Напомнить в WhatsApp': '💬',
   'Написать в WhatsApp': '💬',
   Позвонить: '📞',
-  Пришёл: '✅',
-  'Не пришёл': '🚷',
+  'Приём состоялся': '✅',
+  Неявка: '🚷',
   'Отменить приём': '✖️',
   Восстановить: '↩️',
-  'Исправить: не пришёл': '🚷',
-  'Исправить: пришёл': '✅',
+  'Исправить: неявка': '🚷',
+  'Исправить: приём состоялся': '✅',
   Придёт: '👍',
   Перенос: '🔄',
   'Нет ответа': '📵',
@@ -650,10 +650,10 @@ function cardScreen(a, notice) {
         callButton(a.patient.phone),
       );
     }
-    if (canMarkVisit(a)) actions.push(button('Пришёл', () => act('status', { status: 'DONE' }), 'btn primary'));
+    if (canMarkVisit(a)) actions.push(button('Приём состоялся', () => act('status', { status: 'DONE' }), 'btn primary'));
     // Опасные — отдельной группой внизу, без диалогов, но с «Вернуть» (DD7)
     actions.push(h('div', { class: 'danger-zone' },
-      canMarkVisit(a) ? button('Не пришёл', () => act('status', { status: 'NO_SHOW' }, undoable('Отмечено: не пришёл')), 'btn danger') : null,
+      canMarkVisit(a) ? button('Неявка', () => act('status', { status: 'NO_SHOW' }, undoable('Отмечено: неявка')), 'btn danger') : null,
       button('Отменить приём', () => act('status', { status: 'CANCELLED' }, undoable('Отменено')), 'btn danger')));
   } else if (a.status === 'CANCELLED') {
     actions.push(h('p', { class: 'hint' }, 'Восстановленный приём попросит напомнить пациенту заново.'),
@@ -665,9 +665,9 @@ function cardScreen(a, notice) {
       duration: minutesBetween(a.startAt, a.endAt), patient: a.patient, doctorId: a.doctorId,
     }), 'btn primary'));
     actions.push(h('div', { class: 'danger-zone' },
-      button('Исправить: не пришёл', () => act('status', { status: 'NO_SHOW' }, undoable('Отмечено: не пришёл')), 'btn danger')));
+      button('Исправить: неявка', () => act('status', { status: 'NO_SHOW' }, undoable('Отмечено: неявка')), 'btn danger')));
   } else if (a.status === 'NO_SHOW') {
-    actions.push(button('Исправить: пришёл', () => act('status', { status: 'DONE' })));
+    actions.push(button('Исправить: приём состоялся', () => act('status', { status: 'DONE' })));
   }
 
   render(h('section', { class: 'screen' },
@@ -680,7 +680,7 @@ function cardScreen(a, notice) {
       type: 'button', class: 'link name-link', onclick: () => patientScreen(a.patient.id, () => cardScreen(a)),
     }, a.patient.fullName, ' ›'), h('br'), formatPhone(a.patient.phone)),
     h('p', { class: `tone-${state.tone}` }, `${state.icon} ${state.label}`),
-    a.source === 'PATIENT' ? h('p', { class: 'hint' }, `Записался сам через бота${a.serviceName ? ` · ${a.serviceName}` : ''}`) : null,
+    a.source === 'PATIENT' ? h('p', { class: 'hint' }, `Запись через бота${a.serviceName ? ` · ${a.serviceName}` : ''}`) : null,
     // Напоминали ли — видно и потом, а не только в плашке после нажатия
     a.reminderOpenedAt && a.status === 'SCHEDULED'
       ? h('p', { class: 'sent-note' }, `🔔 Напоминание отправлено ${sentText(a.reminderOpenedAt)}`) : null,
@@ -1424,8 +1424,8 @@ async function statsScreen(back) {
       h('div', { class: 'stat-head' }, h('strong', {}, weekLabel(w.weekStart)), i === 0 ? h('span', { class: 'hint' }, ' · эта неделя') : null),
       w.booked === 0 ? h('div', { class: 'hint' }, 'приёмов не было') : [
         h('div', { class: w.noShow > 0 ? 'tone-bad' : 'tone-ok' },
-          `Не пришли: ${w.noShow}${percent === null ? '' : ` (${percent}%)`}`),
-        h('div', { class: 'hint' }, [`приёмов ${w.booked}`, `пришли ${w.done}`, `отменено ${w.cancelled}`,
+          `Неявок: ${w.noShow}${percent === null ? '' : ` (${percent}%)`}`),
+        h('div', { class: 'hint' }, [`приёмов ${w.booked}`, `состоялось ${w.done}`, `отменено ${w.cancelled}`,
           `напомнили ${w.reminded}`, w.unmarked ? `не отмечено ${w.unmarked}` : null].filter(Boolean).join(' · ')),
       ]);
   };
@@ -1434,7 +1434,7 @@ async function statsScreen(back) {
     h('p', {}, average === null ? 'Через неделю здесь будет среднее неявок в неделю.'
       : `В среднем ${noShowsPhrase(average)} в неделю. До приложения было 2–3.`),
     // Неотмеченные портят цифры: не пришёл или пришёл — неизвестно
-    unmarked ? h('p', { class: 'tone-wait' }, `Не отмечено «пришёл / не пришёл»: ${unmarked} — без отметок неявки не посчитать.`) : null,
+    unmarked ? h('p', { class: 'tone-wait' }, `Не отмечено «явка / неявка»: ${unmarked} — без отметок неявки не посчитать.`) : null,
     h('ul', { class: 'stats', role: 'list' }, weeks.map(week))));
 }
 
@@ -1482,7 +1482,7 @@ function patientsScreen(back) {
       type: 'button', class: 'btn', onclick: () => patientScreen(entry.patient.id, () => patientsScreen(back)),
     }, entry.patient.fullName, h('br'), h('span', { class: 'hint' }, entry.upcoming
       ? `сейчас: ${dayTitle(dateOf(entry.upcoming.startAt))}, ${timeOf(entry.upcoming.startAt)}`
-      : 'ещё не записан', ` · ждёт с ${dayTitle(dateOf(entry.createdAt))}`))));
+      : 'записи пока нет', ` · ждёт с ${dayTitle(dateOf(entry.createdAt))}`))));
   }).catch((e) => fatal(e));
 }
 
@@ -1523,7 +1523,7 @@ async function patientScreen(patientId, back) {
     h('span', { class: `status tone-${state.tone}` }, `${state.icon} ${state.label}`));
   };
   // Цифры — то, ради чего проект: видно, кто часто не приходит
-  const stats = [`Пришёл: ${card.done}`, `не пришёл: ${card.noShow}`, `отменял: ${card.cancelled}`].join(' · ');
+  const stats = [`Состоялось приёмов: ${card.done}`, `неявок: ${card.noShow}`, `отмен: ${card.cancelled}`].join(' · ');
   render(h('section', { class: 'screen' },
     backButton.link(),
     h('h1', {}, p.fullName),
@@ -1752,7 +1752,7 @@ function newScreen({ date, time, duration, patient, candidates = [], doctorId = 
     ...candidates.map((entry) => h('div', { class: 'candidate' },
       h('div', {}, h('strong', {}, entry.patient.fullName), h('br'), h('span', { class: 'hint' },
         entry.upcoming ? `сейчас: ${dayTitle(dateOf(entry.upcoming.startAt))}, ${timeOf(entry.upcoming.startAt)}`
-          : 'ещё не записан', ` · ${entry.durationMinutes} мин`)),
+          : 'записи пока нет', ` · ${entry.durationMinutes} мин`)),
       h('div', { class: 'choice' },
         h('button', {
           type: 'button', class: 'btn',

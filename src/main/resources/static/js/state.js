@@ -11,11 +11,11 @@ const OFFSET = '+06:00';
  */
 export function rowState(a, now = new Date()) {
   if (a.status === 'CANCELLED') return { label: 'Отменён', icon: '❌', tone: 'hint', struck: true };
-  if (a.status === 'DONE') return { label: 'Пришёл', icon: '✅', tone: 'ok' };
-  if (a.status === 'NO_SHOW') return { label: 'Не пришёл', icon: '🚷', tone: 'bad' };
+  if (a.status === 'DONE') return { label: 'Приём состоялся', icon: '✅', tone: 'ok' };
+  if (a.status === 'NO_SHOW') return { label: 'Неявка', icon: '🚷', tone: 'bad' };
   // Заявка пациента из бота: время занято, ждёт решения врача
   if (a.status === 'REQUESTED') return { label: 'Заявка — подтвердите', icon: '🆕', tone: 'wait' };
-  if (new Date(a.endAt) < now) return { label: 'Отметьте: пришёл?', icon: '❓', tone: 'wait' };
+  if (new Date(a.endAt) < now) return { label: 'Отметьте: явка или неявка?', icon: '❓', tone: 'wait' };
   if (a.reply === 'CONFIRMED') return { label: 'Придёт', icon: '👍', tone: 'ok' };
   if (a.reply === 'RESCHEDULE') return { label: 'Перенос', icon: '🔄', tone: 'wait' };
   if (a.reply === 'NO_ANSWER') return { label: 'Нет ответа', icon: '📵', tone: 'wait' };

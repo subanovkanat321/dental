@@ -61,7 +61,7 @@ test('профиль врача: загруженное фото видно вр
   await expect(patient.locator('.hero img.hero-photo')).toHaveAttribute('src', '/doctors/1/photo?v=1');
 });
 
-test('«Пришёл» → «Записать на следующий визит»: тот же пациент и длительность, через неделю', async ({ page }) => {
+test('«Приём состоялся» → «Записать на следующий визит»: тот же пациент и длительность, через неделю', async ({ page }) => {
   const id = await addAppointment(await addPatient('Айгуль'), today(), '09:00', { status: 'DONE', minutes: 45 });
   await openApp(page, { path: `/?appointment=${id}` });
 

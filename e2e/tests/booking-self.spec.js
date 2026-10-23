@@ -39,7 +39,7 @@ test('пациент записывается сам, врач подтверж�
   const doctor = await browser.newPage();
   await openApp(doctor, { path: `/?appointment=${rows[0].id}` });
   await expect(doctor.getByText('Заявка — подтвердите')).toBeVisible();
-  await expect(doctor.getByText('Записался сам через бота · Осмотр и консультация')).toBeVisible();
+  await expect(doctor.getByText('Запись через бота · Осмотр и консультация')).toBeVisible();
   await doctor.getByRole('button', { name: 'Подтвердить' }).click();
   await expect(doctor.getByText('Не напомнили')).toBeVisible();
 

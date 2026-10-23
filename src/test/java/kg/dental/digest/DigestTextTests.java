@@ -40,7 +40,7 @@ class DigestTextTests {
 				Сегодня, пн, 1 июн: 5 приёмов, 10:00–17:30.
 				Подтвердили: 3 · просят перенос: 1 · без ответа: 1.
 				Завтра, вт, 2 июн: 8 приёмов, первый в 09:30.
-				Не отмечено за неделю: 1 — отметьте «Пришёл» или «Не пришёл».""");
+				Не отмечено за неделю: 1 — отметьте «Приём состоялся» или «Неявка».""");
 	}
 
 	@Test
@@ -64,17 +64,17 @@ class DigestTextTests {
 
 		assertThat(DigestText.evening(today, tomorrow)).isEqualTo("""
 				Завтра не напомнили: 5 из 8 — откройте обход.
-				Сегодня не отмечено «пришёл / не пришёл»: 2.""");
+				Сегодня не отмечено «явка / неявка»: 2.""");
 		var allDone = day(TUESDAY, 8, "2099-06-02T03:30:00Z", "2099-06-02T12:00:00Z", 8, 0, 8, 0);
 		assertThat(DigestText.evening(empty(MONDAY), allDone)).isNull();
 	}
 
 	@ParameterizedTest
 	@CsvSource(delimiter = '|', textBlock = """
-			CONFIRMED  | false | Пациент подтвердил.
-			RESCHEDULE | true  | Пациент просил перенос.
-			NO_ANSWER  | true  | Пациент не ответил на напоминание.
-			NONE       | true  | Пациент пока не ответил.
+			CONFIRMED  | false | Ответ пациента: придёт.
+			RESCHEDULE | true  | Ответ пациента: просит перенос.
+			NO_ANSWER  | true  | На напоминание ответа нет.
+			NONE       | true  | Ответа пока нет.
 			NONE       | false | Напоминание не отправляли.
 			""")
 	void preNoticeSaysWhenAndPatientsAnswer(PatientReply reply, boolean reminded, String answer) {

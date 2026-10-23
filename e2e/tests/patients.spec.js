@@ -19,7 +19,7 @@ test('карточка пациента: счётчики, история, пр�
   await openMenu(page, 'Пациенты и лист ожидания');
   await page.getByLabel('Поиск пациента').fill('Айгуль');
   await page.getByRole('button', { name: /^Айгуль Т\./ }).click();
-  await expect(page.getByText('Пришёл: 1 · не пришёл: 1 · отменял: 0')).toBeVisible();
+  await expect(page.getByText('Состоялось приёмов: 1 · неявок: 1 · отмен: 0')).toBeVisible();
   await expect(page.locator('h2:has-text("Впереди") + ul .row')).toHaveCount(1);
   await expect(page.locator('h2:has-text("История") + ul .row')).toHaveCount(2);
 
@@ -65,7 +65,7 @@ test('статистика: неявки прошлой недели и сред
   await openApp(page);
 
   await openMenu(page, 'Статистика неявок');
-  await expect(page.getByText('Не пришли: 1 (50%)')).toBeVisible();
+  await expect(page.getByText('Неявок: 1 (50%)')).toBeVisible();
   await expect(page.getByText('В среднем 1 неявка в неделю. До приложения было 2–3.')).toBeVisible();
 });
 

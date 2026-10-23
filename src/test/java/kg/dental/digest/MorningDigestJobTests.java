@@ -83,7 +83,7 @@ class MorningDigestJobTests {
 				Сегодня, пн, 1 июн: 2 приёма, 10:00–14:30.
 				Подтвердили: 1 · без ответа: 1.
 				Завтра, вт, 2 июн: 1 приём, первый в 09:30.
-				Не отмечено за неделю: 1 — отметьте «Пришёл» или «Не пришёл».""");
+				Не отмечено за неделю: 1 — отметьте «Приём состоялся» или «Неявка».""");
 		assertThat(text).doesNotContain("Айгуль", "Токтогулова", PHONE, "555123456", "123456");
 		verify(telegram).sendMessage(eq(TestInitData.DOCTOR_ID), anyString(),
 				eq(List.of(button("Открыть сегодня", "doctor=1"), button("Открыть завтра", "day=tomorrow&doctor=1"))));
@@ -99,7 +99,7 @@ class MorningDigestJobTests {
 
 		assertThat(sent()).isEqualTo("""
 				Завтра не напомнили: 1 из 1 — откройте обход.
-				Сегодня не отмечено «пришёл / не пришёл»: 1.""");
+				Сегодня не отмечено «явка / неявка»: 1.""");
 
 		jdbc.update("update appointment set status = 'DONE' where start_at < '2099-06-02'");
 		jdbc.update("update appointment set reminder_opened_at = now()");
@@ -117,7 +117,7 @@ class MorningDigestJobTests {
 		preNotice.send(MONDAY_9AM);
 		preNotice.send(MONDAY_9AM.plusSeconds(60)); // следующая минута — тот же приём не повторяется
 
-		assertThat(sent()).isEqualTo("Через 10 мин, в 09:10 — приём (30 мин). Пациент подтвердил.");
+		assertThat(sent()).isEqualTo("Через 10 мин, в 09:10 — приём (30 мин). Ответ пациента: придёт.");
 		verify(telegram).sendMessage(eq(TestInitData.DOCTOR_ID), anyString(),
 				eq(List.of(button("Открыть приём", "appointment=" + soon + "&doctor=1"))));
 	}

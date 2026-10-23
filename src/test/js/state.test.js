@@ -13,10 +13,10 @@ const PAST = { startAt: '2099-06-01T03:00:00Z', endAt: '2099-06-01T03:30:00Z' };
 // DD4 + ER2: девять строк таблицы, порядок приоритетов
 const rows = [
   ['CANCELLED побеждает всё', { ...PAST, status: 'CANCELLED', reply: 'CONFIRMED' }, 'Отменён'],
-  ['DONE', { ...PAST, status: 'DONE', reply: 'NONE' }, 'Пришёл'],
-  ['NO_SHOW', { ...PAST, status: 'NO_SHOW', reply: 'CONFIRMED' }, 'Не пришёл'],
+  ['DONE', { ...PAST, status: 'DONE', reply: 'NONE' }, 'Приём состоялся'],
+  ['NO_SHOW', { ...PAST, status: 'NO_SHOW', reply: 'CONFIRMED' }, 'Неявка'],
   ['заявка пациента — раньше «отметьте»', { ...PAST, status: 'REQUESTED', reply: 'NONE' }, 'Заявка — подтвердите'],
-  ['прошедший без отметки — раньше ответа', { ...PAST, status: 'SCHEDULED', reply: 'CONFIRMED' }, 'Отметьте: пришёл?'],
+  ['прошедший без отметки — раньше ответа', { ...PAST, status: 'SCHEDULED', reply: 'CONFIRMED' }, 'Отметьте: явка или неявка?'],
   ['CONFIRMED', { ...FUTURE, status: 'SCHEDULED', reply: 'CONFIRMED', reminderOpenedAt: '2099-05-31T12:00:00Z' }, 'Придёт'],
   ['RESCHEDULE', { ...FUTURE, status: 'SCHEDULED', reply: 'RESCHEDULE' }, 'Перенос'],
   ['NO_ANSWER', { ...FUTURE, status: 'SCHEDULED', reply: 'NO_ANSWER' }, 'Нет ответа'],

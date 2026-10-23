@@ -92,7 +92,7 @@ class BookingNotificationsTests {
 		clearInvocations(telegram);
 		mvc.post().uri("/api/patient/booking/cancel").header(HttpHeaders.AUTHORIZATION, stranger()).exchange();
 
-		assertThat(sentTo(TestInitData.DOCTOR_ID)).startsWith("Пациент отменил запись: ").endsWith("Время освободилось.");
+		assertThat(sentTo(TestInitData.DOCTOR_ID)).startsWith("Запись отменена пациентом: ").endsWith("Время освободилось.");
 	}
 
 	private void decide(String status) {

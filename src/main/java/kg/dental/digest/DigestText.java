@@ -60,7 +60,7 @@ final class DigestText {
 				.append(", первый в ").append(time(tomorrow.firstStart(), zone)).append('.');
 		}
 		if (unmarkedWeek > 0) {
-			text.append("\nНе отмечено за неделю: ").append(unmarkedWeek).append(" — отметьте «Пришёл» или «Не пришёл».");
+			text.append("\nНе отмечено за неделю: ").append(unmarkedWeek).append(" — отметьте «Приём состоялся» или «Неявка».");
 		}
 		return text.toString();
 	}
@@ -77,12 +77,12 @@ final class DigestText {
 			lines.add("Завтра не напомнили: " + notReady + " из " + tomorrow.active() + " — откройте обход.");
 		}
 		if (today.unmarked() > 0) {
-			lines.add("Сегодня не отмечено «пришёл / не пришёл»: " + today.unmarked() + ".");
+			lines.add("Сегодня не отмечено «явка / неявка»: " + today.unmarked() + ".");
 		}
 		return lines.isEmpty() ? null : String.join("\n", lines);
 	}
 
-	/** «Через 15 мин, в 10:00 — приём (30 мин). Пациент подтвердил.» */
+	/** «Через 15 мин, в 10:00 — приём (30 мин). Ответ пациента: придёт.» */
 	static String preNotice(PreNotice notice, Instant now, ZoneId zone) {
 		var inMinutes = Math.max(1, Math.round(Duration.between(now, notice.startAt()).toSeconds() / 60.0));
 		var length = Duration.between(notice.startAt(), notice.endAt()).toMinutes();
@@ -92,15 +92,15 @@ final class DigestText {
 
 	private static String replyText(PreNotice notice) {
 		if (notice.reply() == PatientReply.CONFIRMED) {
-			return "Пациент подтвердил.";
+			return "Ответ пациента: придёт.";
 		}
 		if (notice.reply() == PatientReply.RESCHEDULE) {
-			return "Пациент просил перенос.";
+			return "Ответ пациента: просит перенос.";
 		}
 		if (notice.reply() == PatientReply.NO_ANSWER) {
-			return "Пациент не ответил на напоминание.";
+			return "На напоминание ответа нет.";
 		}
-		return notice.reminderOpenedAt() != null ? "Пациент пока не ответил." : "Напоминание не отправляли.";
+		return notice.reminderOpenedAt() != null ? "Ответа пока нет." : "Напоминание не отправляли.";
 	}
 
 	private static String day(DayOverview overview) {

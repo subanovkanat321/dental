@@ -161,7 +161,7 @@ public class Appointment {
 			throw invalidTransition("Так изменить статус нельзя");
 		}
 		if (status == SCHEDULED && (target == DONE || target == NO_SHOW) && !startAt.isBefore(startOfTomorrow)) {
-			throw invalidTransition("Отметить «пришёл» можно только в день приёма или позже");
+			throw invalidTransition("Отметить явку можно только в день приёма или позже");
 		}
 		if (status == CANCELLED) {
 			this.reply = PatientReply.NONE;
@@ -184,7 +184,7 @@ public class Appointment {
 			case REQUESTED, SCHEDULED, DONE -> false;
 		};
 		if (!possible) {
-			throw invalidTransition("Вернуть можно только отмену приёма или отметку «не пришёл»");
+			throw invalidTransition("Вернуть можно только отмену приёма или отметку «неявка»");
 		}
 		this.status = previousStatus;
 	}

@@ -71,7 +71,7 @@ class BookingNotifications {
 			return;
 		}
 		var a = appointments.get(event.appointmentId());
-		notifier.send(a.doctorId(), "Пациент отменил", "Пациент отменил запись: " + shortTime(a.startAt(), properties.timeZone())
+		notifier.send(a.doctorId(), "Пациент отменил", "Запись отменена пациентом: " + shortTime(a.startAt(), properties.timeZone())
 				+ ". Время освободилось.", List.of(new DoctorNotifier.Link("Открыть приём", "appointment=" + a.id())));
 	}
 
