@@ -43,6 +43,9 @@ dental:
     morning-time: ${MORNING_DIGEST_TIME:09:00}
     evening-time: ${EVENING_DIGEST_TIME:18:30}
     before-minutes: ${NOTIFY_BEFORE_MINUTES:15}
+    # Бот сам напоминает о завтрашнем приёме тем, кто записался через бота
+    patient-reminder-time: ${PATIENT_REMINDER_TIME:18:00}
+    patient-reminders: ${AUTO_REMIND_PATIENTS:true}
   # Подпись в конце напоминания в WhatsApp, например «Стоматология «Улыбка», 0555 000 000»
   clinic-signature: ${CLINIC_SIGNATURE:}
   telegram:
