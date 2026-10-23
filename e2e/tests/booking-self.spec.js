@@ -14,7 +14,10 @@ test('пациент записывается сам, врач подтверж�
   });
 
   await expect(patient.getByRole('heading', { name: 'Запись к стоматологу' })).toBeVisible();
-  // Единственная услуга выбрана сама
+  // Услуг несколько (V6) — пока не выбрана, времени нет
+  await expect(patient.getByText('Сначала выберите услугу')).toBeVisible();
+  await expect(patient.getByRole('button', { name: 'Консультация по брекетам · 30 мин' })).toBeVisible();
+  await patient.getByRole('button', { name: 'Осмотр и консультация · 30 мин' }).click();
   await expect(patient.getByRole('button', { name: 'Осмотр и консультация · 30 мин' })).toHaveAttribute('aria-pressed', 'true');
   await patient.locator('.day').nth(2).click(); // послезавтра — сетка точно полная
   await patient.locator('.slot', { hasText: /^10:00$/ }).click();
@@ -57,6 +60,7 @@ test('занятое время пациенту не показывается',
     [rows[0].id, new Date(`${day}T10:00:00+06:00`), new Date(`${day}T10:30:00+06:00`)]);
   await openApp(page, { initData: signInitData(STRANGER) });
 
+  await page.getByRole('button', { name: 'Осмотр и консультация · 30 мин' }).click();
   await page.locator('.day').nth(2).click();
   await expect(page.locator('.slot', { hasText: /^09:30$/ })).toBeVisible();
   await expect(page.locator('.slot', { hasText: /^10:00$/ })).toHaveCount(0);
@@ -70,13 +74,13 @@ test('врач добавляет услугу — пациент видит е�
   await doctor.getByRole('button', { name: 'Меню' }).click();
   await doctor.getByRole('button', { name: 'Услуги для самозаписи' }).click();
   await doctor.getByRole('button', { name: '+ Добавить услугу' }).click();
-  await doctor.locator('input[type=text]').fill('Профессиональная чистка');
-  await doctor.locator('input[type=number]').fill('60');
+  await doctor.locator('input[type=text]').fill('Имплантация');
+  await doctor.locator('input[type=number]').fill('120');
   await pressMainButton(doctor);
-  await expect(doctor.getByRole('button', { name: 'Профессиональная чистка · 60 мин' })).toBeVisible();
+  await expect(doctor.getByRole('button', { name: 'Имплантация · 120 мин' })).toBeVisible();
 
   const patient = await browser.newPage();
   await openApp(patient, { initData: signInitData(STRANGER) });
-  await expect(patient.getByRole('button', { name: 'Профессиональная чистка · 60 мин' })).toBeVisible();
-  await db.query("delete from service_type where name = 'Профессиональная чистка'");
+  await expect(patient.getByRole('button', { name: 'Имплантация · 120 мин' })).toBeVisible();
+  await db.query("delete from service_type where name = 'Имплантация'");
 });

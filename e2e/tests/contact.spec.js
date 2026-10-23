@@ -66,3 +66,22 @@ test('в строке дня у записавшегося через бота �
   await expect(page.getByRole('button', { name: 'Telegram: Бакыт Маматов, 10:00' })).toHaveText('TG');
   await expect(page.getByRole('button', { name: 'WhatsApp: Айгуль, 11:00' })).toHaveText('WA');
 });
+
+test('«Позвонить» в Telegram открывает страницу звонка, номер — только во фрагменте', async ({ page }) => {
+  const id = await addAppointment(await addPatient('Айгуль', '996555123456'), tomorrow(), '10:00');
+  await openApp(page, { path: `/?appointment=${id}` });
+
+  await page.getByRole('link', { name: 'Позвонить' }).click();
+
+  const [[kind, url]] = await calls(page);
+  expect(kind).toBe('openLink');
+  expect(url).toMatch(/\/a\/[0-9a-z]+\/call\.html#996555123456$/);
+});
+
+test('страница звонка: кнопка с номером и ссылкой tel:', async ({ page }) => {
+  // Переход на tel: в Chromium без звонилки ничего не делает — проверяем саму ссылку
+  // Страница сразу уходит на tel:, и «load» в Chromium не наступает — ждём только начала загрузки
+  await page.goto('/call.html#996555123456', { waitUntil: 'commit' });
+
+  await expect(page.getByRole('link', { name: 'Позвонить +996 555 123 456' })).toHaveAttribute('href', 'tel:+996555123456');
+});

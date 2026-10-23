@@ -251,9 +251,21 @@ function remindBest(a, onChange) {
   else remind(a, onChange);
 }
 
-/** «Позвонить»: обычная ссылка tel: — телефон откроет звонилку (openLink Telegram понимает только http). */
+/**
+ * «Позвонить». Внутри Telegram ссылка tel: не срабатывает, а openLink принимает только http(s):
+ * открываем свою страницу call.html (рядом с app.js, с той же версией), она передаёт tel:
+ * телефону. Номер — во фрагменте #…: он не уходит на сервер. Вне Telegram — обычная ссылка.
+ */
 function callButton(phone) {
-  return h('a', { class: 'btn', href: `tel:+${phone}` }, 'Позвонить');
+  const tel = `tel:+${phone}`;
+  return h('a', {
+    class: 'btn', href: tel,
+    onclick: (e) => {
+      if (!insideTelegram) return;
+      e.preventDefault();
+      openLink(`${new URL('../call.html', import.meta.url)}#${phone}`);
+    },
+  }, 'Позвонить');
 }
 
 // ---------- «День» ----------
