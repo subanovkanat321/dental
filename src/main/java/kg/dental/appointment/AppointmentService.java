@@ -231,6 +231,16 @@ public class AppointmentService {
 		return save(Appointment.requested(patient, doctorId, startAt, serviceType, clock.instant()));
 	}
 
+	/** Пациент сам переносит свою запись в боте (свободное время проверил BookingService). */
+	@Transactional
+	public AppointmentView rescheduleByPatient(long id, Instant startAt) {
+		var appointment = require(id);
+		appointment.rescheduleByPatient(startAt);
+		var saved = save(appointment); // гонка за то же время — 409 от базы
+		preNotices.reset(id);
+		return saved;
+	}
+
 	/** Пациент сам отменяет свою заявку или запись — без версии: у него нет экрана врача. */
 	@Transactional
 	public AppointmentView cancelByPatient(long id) {

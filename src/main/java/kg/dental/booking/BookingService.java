@@ -5,10 +5,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import kg.dental.BookingProperties;
 import kg.dental.DentalProperties;
 import kg.dental.appointment.AppointmentService;
+import kg.dental.appointment.AppointmentView;
 import kg.dental.appointment.SlotService;
 import kg.dental.patient.PatientService;
 import kg.dental.clinic.ClinicService;
@@ -130,6 +132,34 @@ class BookingService {
 		return BookingViews.Booking.of(appointment, doctors.nameOf(doctorId));
 	}
 
+	/** Свободное время для переноса своей записи: тот же врач и длительность, своё старое время — свободно. */
+	@Transactional(readOnly = true)
+	public BookingViews.Slots rescheduleSlots(long telegramId, LocalDate date) {
+		requireEnabled();
+		var current = currentView(telegramId).orElseThrow(() -> new NotFoundException("Записи нет"));
+		var today = LocalDate.ofInstant(clock.instant(), properties.timeZone());
+		if (date.isBefore(today) || date.isAfter(today.plusDays(booking.daysAhead()))) {
+			return new BookingViews.Slots(false, List.of(), List.of(), null);
+		}
+		var day = slots.slots(date, current.doctorId(), Duration.between(current.startAt(), current.endAt()), current.id());
+		var earliest = earliest();
+		return new BookingViews.Slots(day.workingDay(),
+				day.starts().stream().filter(start -> !start.isBefore(earliest)).toList(), day.breaks(), day.dayOff());
+	}
+
+	/** Пациент переносит свою запись: только время из сетки; врач подтвердит новое время. */
+	@Transactional
+	public BookingViews.Booking reschedule(long telegramId, Instant startAt) {
+		requireEnabled();
+		var current = currentView(telegramId).orElseThrow(() -> new NotFoundException("Записи нет"));
+		if (!rescheduleSlots(telegramId, LocalDate.ofInstant(startAt, properties.timeZone())).starts().contains(startAt)) {
+			throw ConflictException.timeTaken();
+		}
+		var moved = appointments.rescheduleByPatient(current.id(), startAt);
+		events.publishEvent(new BookingEvents.RescheduledByPatient(moved.id(), current.startAt()));
+		return BookingViews.Booking.of(moved, doctors.nameOf(moved.doctorId()));
+	}
+
 	@Transactional
 	public void cancel(long telegramId) {
 		var current = current(telegramId);
@@ -142,10 +172,11 @@ class BookingService {
 
 	/** Активная запись или заявка человека, null — нет. */
 	private BookingViews.Booking current(long telegramId) {
-		return patients.byTelegram(telegramId)
-			.map(p -> appointments.upcoming(List.of(p.getId())).get(p.getId()))
-			.map(a -> BookingViews.Booking.of(a, doctors.nameOf(a.doctorId())))
-			.orElse(null);
+		return currentView(telegramId).map(a -> BookingViews.Booking.of(a, doctors.nameOf(a.doctorId()))).orElse(null);
+	}
+
+	private Optional<AppointmentView> currentView(long telegramId) {
+		return patients.byTelegram(telegramId).map(p -> appointments.upcoming(List.of(p.getId())).get(p.getId()));
 	}
 
 	private Instant earliest() {

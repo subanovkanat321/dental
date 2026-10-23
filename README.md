@@ -132,6 +132,9 @@ https-ссылки 2gis.kg / 2gis.ru / 2gis.com / go.2gis.com), Telegram и те
 - Заявка (`REQUESTED`) сразу занимает время; врачу в бот — «Новая заявка: вт, 24 окт, 10:00 —
   Осмотр (30 мин)» (без имени и телефона) с кнопкой. В карточке: «Подтвердить» / «Отклонить»;
   пациенту в бот — «запись подтверждена» или «время недоступно».
+- **Перенос пациентом**: «Перенести на другое время» в «Ваша запись» — у того же врача, той же
+  длительности, по тем же правилам; новое время снова ждёт подтверждения врача, врачу —
+  «Пациент перенёс запись: вт 10:00 → ср 12:00».
 - Не раньше чем через 2 часа и не дальше 30 дней, только время из сетки, одна запись на человека;
   пациент сам видит и отменяет свою запись, чужие имена и расписание ему не видны.
 - **Цены**: у услуги можно указать цену «от» в сомах — пациент видит «от 2 000 сом» на плитке.
@@ -171,6 +174,7 @@ https-ссылки 2gis.kg / 2gis.ru / 2gis.com / go.2gis.com), Telegram и те
 | `GET /api/appointments/stats?weeks=8` | по неделям: записано, пришли, не пришли, отменено, не отмечено, напомнили |
 | `GET /api/appointments/recall?months=6` | кого пора позвать на профосмотр |
 | `POST /api/patients/{id}/recall-invited` | кнопка WhatsApp «пора на осмотр» нажата |
+| `GET /api/patient/booking/slots?date=`, `POST /api/patient/booking/reschedule` `{startAt}` | перенос своей записи пациентом |
 | `GET /api/patient/me`, `GET /api/patient/slots?date=&doctorId=&serviceTypeId=`, `POST /api/patient/booking`, `POST /api/patient/booking/cancel` | самозапись: любой, кого подписал Telegram; кто он — из initData |
 | `GET/POST/PUT /api/service-types` | услуги для самозаписи (врач) |
 | `GET /api/waitlist`, `POST /api/waitlist` `{patientId, durationMinutes}`, `DELETE /api/waitlist/{id}` | лист ожидания |

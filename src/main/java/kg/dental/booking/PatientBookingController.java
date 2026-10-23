@@ -56,6 +56,22 @@ class PatientBookingController {
 				request.fullName(), request.consent());
 	}
 
+	record Reschedule(@NotNull(message = "Выберите время") Instant startAt) {
+	}
+
+	/** Свободное время для переноса своей записи — у того же врача, той же длительности. */
+	@GetMapping("/booking/slots")
+	BookingViews.Slots rescheduleSlots(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long telegramId,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+		return service.rescheduleSlots(telegramId, date);
+	}
+
+	@PostMapping("/booking/reschedule")
+	BookingViews.Booking reschedule(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long telegramId,
+			@Valid @RequestBody Reschedule request) {
+		return service.reschedule(telegramId, request.startAt());
+	}
+
 	@PostMapping("/booking/cancel")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	void cancel(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long telegramId) {

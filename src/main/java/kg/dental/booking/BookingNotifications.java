@@ -76,6 +76,18 @@ class BookingNotifications {
 	}
 
 	@TransactionalEventListener
+	void rescheduledByPatient(BookingEvents.RescheduledByPatient event) {
+		if (!notifier.enabled()) {
+			return;
+		}
+		var a = appointments.get(event.appointmentId());
+		var zone = properties.timeZone();
+		notifier.send(a.doctorId(), "Пациент перенёс", "Пациент перенёс запись: " + shortTime(event.previousStart(), zone)
+				+ " → " + shortTime(a.startAt(), zone) + ". Подтвердите новое время в приложении.",
+				List.of(new DoctorNotifier.Link("Открыть заявку", "appointment=" + a.id())));
+	}
+
+	@TransactionalEventListener
 	void decided(RequestDecided event) {
 		if (!notifier.enabled()) {
 			return;

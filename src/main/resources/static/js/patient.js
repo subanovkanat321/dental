@@ -1,6 +1,6 @@
 // Самозапись пациента: всё, что видит в Mini App не-врач. Общие кусочки (DOM, запросы,
 // кнопки Telegram) приходят из app.js параметром ui — без циклических импортов.
-import { todayIn, timeOf, toInstant, formatPhone, bookingDays, whenText, serviceEmoji, breakNote, priceText, initials } from './state.js';
+import { todayIn, timeOf, toInstant, dateOf, formatPhone, bookingDays, whenText, serviceEmoji, breakNote, priceText, initials } from './state.js';
 
 const STATUS = {
   REQUESTED: '⏳ Ждёт подтверждения врача — ответ придёт в этот чат',
@@ -114,11 +114,80 @@ function bookingScreen(ui, me) {
       h('p', { class: 'big' }, '📅 ', capitalize(`${whenText(b.startAt)}, в ${timeOf(b.startAt)}`)),
       h('div', {}, `${serviceEmoji(b.serviceName || '')} `, b.serviceName || 'Приём у стоматолога'),
       h('p', {}, h('span', { class: `status ${b.status === 'SCHEDULED' ? 'tone-ok' : 'tone-wait'}` }, STATUS[b.status] || b.status))),
+    h('button', { type: 'button', class: 'btn', onclick: () => rescheduleScreen(ui, me) },
+      h('span', { class: 'ico', 'aria-hidden': 'true' }, '🗓️'), 'Перенести на другое время'),
     clinicCard(ui, me.clinic),
     me.clinicContact ? h('p', { class: 'hint' }, `📞 Вопросы — по телефону клиники: ${me.clinicContact}`) : null,
     error,
     h('div', { class: 'danger-zone' }, cancel),
     supportFooter(ui, me.clinic)));
+}
+
+/**
+ * Перенос своей записи: другой день и время у того же врача, той же длительности. Своё
+ * прежнее время в сетке свободно. Новое время врач подтвердит — как и первую заявку.
+ */
+function rescheduleScreen(ui, me) {
+  const { h } = ui;
+  const b = me.booking;
+  ui.backButton.set(() => bookingScreen(ui, me));
+  let date = dateOf(b.startAt);
+  let chosen = '';
+  let seq = 0;
+  const dayBox = h('div', { class: 'days', role: 'group', 'aria-label': 'День' });
+  const grid = h('div', { class: 'slots', role: 'group', 'aria-label': 'Свободное время' });
+  const error = h('div', { class: 'error', role: 'alert' });
+
+  function drawDays() {
+    dayBox.replaceChildren(...bookingDays(todayIn(), Math.min(me.daysAhead, 14)).map((d) => h('button', {
+      type: 'button', class: 'day', 'aria-pressed': String(d.date === date),
+      onclick: () => { date = d.date; chosen = ''; drawDays(); loadSlots(); },
+    }, d.label)));
+  }
+
+  async function loadSlots() {
+    const mine = ++seq;
+    error.textContent = '';
+    grid.replaceChildren(h('div', { class: 'hint' }, 'Загрузка…'));
+    let slots;
+    try {
+      slots = await ui.api('GET', `/api/patient/booking/slots?date=${date}`);
+    } catch (e) {
+      if (mine === seq) grid.replaceChildren(h('div', { class: 'error' }, ui.errorText(e)));
+      return;
+    }
+    if (mine !== seq) return;
+    const notes = [...slots.breaks, slots.dayOff].filter(Boolean).map((x) => h('div', { class: 'break-note' }, breakNote(x)));
+    const starts = slots.starts.map(timeOf);
+    grid.replaceChildren(...notes, ...(starts.length ? starts.map((t) => h('button', {
+      type: 'button', class: 'slot time', 'aria-pressed': String(t === chosen),
+      onclick: () => { chosen = t; grid.querySelectorAll('.slot').forEach((x) => x.setAttribute('aria-pressed', String(x.textContent === t))); },
+    }, t)) : [h('div', { class: 'hint' }, slots.workingDay ? 'На этот день свободного времени нет' : 'Выходной')]));
+  }
+
+  ui.render(h('section', { class: 'screen' },
+    h('h1', {}, 'Перенести запись'),
+    h('p', { class: 'hint' }, `Сейчас: ${whenText(b.startAt)}, в ${timeOf(b.startAt)}. Новое время подтвердит врач.`),
+    h('div', { class: 'field' }, h('span', {}, 'День'), dayBox),
+    h('div', { class: 'field' }, h('span', {}, 'Время'), error, grid)));
+  drawDays();
+  loadSlots();
+  ui.mainButton.set('Перенести', async () => {
+    if (!chosen) { error.textContent = 'Выберите время'; return; }
+    ui.mainButton.busy(true);
+    try {
+      me.booking = await ui.api('POST', '/api/patient/booking/reschedule', { startAt: toInstant(date, chosen) });
+      ui.haptic('success');
+      ui.toast('✅ Запись перенесена — ждём подтверждения врача', null, null, 'ok');
+      bookingScreen(ui, me);
+    } catch (e) {
+      ui.haptic('error');
+      error.textContent = e.code === 'time-taken' ? 'Это время уже заняли — выберите другое' : ui.errorText(e);
+      if (e.code === 'time-taken') { chosen = ''; loadSlots(); }
+    } finally {
+      ui.mainButton.busy(false);
+    }
+  });
 }
 
 /** Запись: услуга → день → время → имя, телефон из Telegram, согласие → «Записаться». */

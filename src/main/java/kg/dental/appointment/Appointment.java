@@ -129,6 +129,15 @@ public class Appointment {
 		this.reminderOpenedAt = null;
 	}
 
+	/**
+	 * Пациент сам перенёс запись в боте: длительность прежняя, а новое время снова ждёт
+	 * подтверждения врача — как и первая заявка.
+	 */
+	void rescheduleByPatient(Instant newStart) {
+		reschedule(newStart, Duration.between(startAt, endAt));
+		this.status = REQUESTED;
+	}
+
 	void changeReply(PatientReply newReply) {
 		requireStatus(SCHEDULED, "Ответ пациента отмечают только у запланированного приёма");
 		this.reply = newReply;

@@ -84,3 +84,26 @@ test('врач добавляет услугу — пациент видит е�
   await expect(patient.getByRole('button', { name: 'Имплантация · 120 мин' })).toBeVisible();
   await db.query("delete from service_type where name = 'Имплантация'");
 });
+
+test('пациент переносит запись — новое время ждёт подтверждения врача', async ({ page }) => {
+  await saveContact(STRANGER, '996700112233');
+  const { rows: [p] } = await db.query(
+    `insert into patient (full_name, phone, telegram_id) values ('Бакыт', '996700112233', $1) returning id`, [STRANGER]);
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bishkek' }).format(new Date(Date.now() + 2 * 86400000));
+  await db.query(`insert into appointment (doctor_id, patient_id, start_at, end_at, status, source)
+    values (1, $1, $2, $3, 'SCHEDULED', 'PATIENT')`,
+  [p.id, new Date(`${day}T10:00:00+06:00`), new Date(`${day}T10:30:00+06:00`)]);
+  await openApp(page, { initData: signInitData(STRANGER) });
+
+  await expect(page.getByText('✅ Подтверждена')).toBeVisible();
+  await page.getByRole('button', { name: 'Перенести на другое время' }).click();
+  await expect(page.getByRole('heading', { name: 'Перенести запись' })).toBeVisible();
+  await page.locator('.slot', { hasText: /^12:00$/ }).click();
+  await pressMainButton(page);
+
+  await expect(page.getByRole('heading', { name: 'Ваша запись' })).toBeVisible();
+  await expect(page.getByText(/Ждёт подтверждения врача/)).toBeVisible();
+  await expect(page.locator('.big')).toContainText('в 12:00');
+  const { rows } = await db.query('select status from appointment');
+  expect(rows[0].status).toBe('REQUESTED');
+});
