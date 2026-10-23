@@ -4,7 +4,7 @@ import {
   rowState, todayIn, addDays, toInstant, timeOf, dateOf, minutesBetween, dayTitle, canMarkVisit,
   formatPhone, looksLikePhone, dayItems, windowDuration,
   reminderText, whatsappUrl, canRemind, readyCount, nextToRemind, fitsWindow, freeSlotText,
-  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase,
+  weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, stripDays, recordsPhrase, timeOffWhen,
 } from './state.js';
 import { startPatient } from './patient.js';
 
@@ -59,6 +59,7 @@ const ICONS = {
   'Позвать на профосмотр': '🔔',
   'Статистика неявок': '📊',
   'Услуги для самозаписи': '🦷',
+  'Перерывы и выходные': '☕',
   'Записать снова': '➕',
   'Изменить имя или телефон': '✏️',
   'Поделиться номером': '📱',
@@ -402,12 +403,12 @@ async function dayScreen(date, flashId) {
     const isTomorrow = date === addDays(todayIn(now), 1);
     // Нерабочий день (WORK_DAYS): «Выходной», строк «свободно» нет (ER5)
     const { ready, total } = readyCount(appointments);
-    note.textContent = [!slots.workingDay && 'Выходной', isTomorrow && total > 0 && `Готово ${ready} из ${total}`]
+    note.textContent = [!slots.workingDay && (slots.dayOff ? `${slots.dayOff.emoji} ${slots.dayOff.title}` : 'Выходной'), isTomorrow && total > 0 && `Готово ${ready} из ${total}`]
       .filter(Boolean).join(' · ');
-    const items = dayItems(appointments, slots.free);
+    const items = dayItems(appointments, slots.free, slots.breaks);
     const next = date === todayIn(now)
       ? appointments.find((a) => a.status === 'SCHEDULED' && new Date(a.startAt) > now) : null;
-    list.replaceChildren(...items.map((item) => (item.free
+    list.replaceChildren(...items.map((item) => (item.pause ? pauseRow(item) : item.free
       ? freeRow(date, item, waitlist) : row(item, item === next, item.id === flash, now, draw))));
     flash = null;
 
@@ -421,10 +422,11 @@ async function dayScreen(date, flashId) {
     }
   }
 
-  if (appointments.length === 0 && slots.free.length === 0) {
-    render(head, h('div', { class: 'message hint' }, h('div', { class: 'empty-emoji', 'aria-hidden': 'true' }, slots.workingDay ? '🗓️' : '🌴'),
-      'На этот день записей нет'));
-    note.textContent = slots.workingDay ? '' : 'Выходной';
+  if (appointments.length === 0 && slots.free.length === 0 && slots.breaks.length === 0) {
+    render(head, h('div', { class: 'message hint' },
+      h('div', { class: 'empty-emoji', 'aria-hidden': 'true' }, slots.dayOff?.emoji || (slots.workingDay ? '🗓️' : '🌴')),
+      slots.dayOff ? `${slots.dayOff.title} — записей нет` : 'На этот день записей нет'));
+    note.textContent = slots.workingDay || slots.dayOff ? '' : 'Выходной';
     return;
   }
   render(head, list);
@@ -441,6 +443,14 @@ function short(name) {
  * «свободно 11:00–12:00»: нажатие — «Новая запись» с этим временем (DD2). Если кто-то из листа
  * ожидания помещается в окно — «ждут: N», и в записи они будут первыми.
  */
+/** Перерыв в «Дне»: «🕌 13:00 Джума-намаз до 15:00» — не нажимается, записи на это время нет. */
+function pauseRow(p) {
+  return h('li', { class: 'row pause', role: 'listitem', 'aria-label': `Перерыв с ${timeOf(p.startAt)} до ${timeOf(p.endAt)}: ${p.title}` },
+    h('span', { class: 'time' }, timeOf(p.startAt)),
+    h('span', { class: 'name' }, h('span', { 'aria-hidden': 'true' }, `${p.emoji} `), p.title),
+    h('span', { class: 'time hint' }, timeOf(p.endAt)));
+}
+
 function freeRow(date, slot, waitlist = []) {
   const candidates = waitlist.filter((entry) => fitsWindow(entry, slot));
   const open = () => newScreen({ date, time: timeOf(slot.startAt), duration: windowDuration(slot), candidates });
@@ -759,7 +769,125 @@ function menuScreen(back) {
     h('button', { type: 'button', class: 'btn', onclick: () => patientsScreen(self) }, 'Пациенты и лист ожидания'),
     h('button', { type: 'button', class: 'btn', onclick: () => recallScreen(self) }, 'Позвать на профосмотр'),
     h('button', { type: 'button', class: 'btn', onclick: () => statsScreen(self) }, 'Статистика неявок'),
-    h('button', { type: 'button', class: 'btn', onclick: () => servicesScreen(self) }, 'Услуги для самозаписи')));
+    h('button', { type: 'button', class: 'btn', onclick: () => servicesScreen(self) }, 'Услуги для самозаписи'),
+    h('button', { type: 'button', class: 'btn', onclick: () => timeOffScreen(self) }, 'Перерывы и выходные')));
+}
+
+// ---------- Перерывы и выходные ----------
+
+/** Время, когда врач не принимает: джума-намаз, обед, отпуск. Его нет в сетке у пациентов. */
+async function timeOffScreen(back) {
+  const id = ++screenId;
+  mainButton.hide();
+  backButton.set(back);
+  const self = () => timeOffScreen(back);
+  let list;
+  try {
+    list = await api('GET', '/api/time-off');
+  } catch (e) {
+    if (id !== screenId || fatal(e)) return;
+    render(h('section', { class: 'screen' }, backButton.link(), h('div', { class: 'message' }, errorText(e))));
+    return;
+  }
+  if (id !== screenId) return;
+  const error = h('div', { class: 'error', role: 'alert' });
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Перерывы и выходные'),
+    h('p', { class: 'hint' }, 'В это время пациенты не смогут записаться через бота. Вы сами записать можете.'),
+    error,
+    list.length ? list.map((t) => h('div', { class: 'timeoff' },
+      h('span', { class: 'timeoff-emoji', 'aria-hidden': 'true' }, t.emoji),
+      h('div', { class: 'timeoff-text' }, h('div', { class: 'timeoff-title' }, t.title), h('div', { class: 'hint' }, timeOffWhen(t))),
+      h('button', {
+        type: 'button', class: 'link danger-link', 'aria-label': `Удалить: ${t.title}`,
+        onclick: async () => {
+          try {
+            await api('DELETE', `/api/time-off/${t.id}`);
+            haptic('success');
+            self();
+          } catch (e) {
+            if (!fatal(e)) error.textContent = errorText(e);
+          }
+        },
+      }, 'Удалить'))) : h('div', { class: 'hint' }, 'Перерывов нет'),
+    h('button', { type: 'button', class: 'btn primary', onclick: () => timeOffEditScreen(self) }, '+ Добавить')));
+}
+
+const TIME_OFF_EMOJI = ['🕌', '🍽️', '☕', '🏖️', '✈️', '🤒', '📚', '👨‍👩‍👧', '⏸️'];
+const WEEKDAY_NAMES = [['MONDAY', 'Пн'], ['TUESDAY', 'Вт'], ['WEDNESDAY', 'Ср'], ['THURSDAY', 'Чт'], ['FRIDAY', 'Пт'],
+  ['SATURDAY', 'Сб'], ['SUNDAY', 'Вс']];
+
+/** Новый перерыв: каждую неделю или по датам; на весь день или с–по. */
+function timeOffEditScreen(back) {
+  ++screenId;
+  backButton.set(back);
+  let weekly = true;
+  let weekday = 'FRIDAY';
+  let emoji = TIME_OFF_EMOJI[0];
+  const title = h('input', { type: 'text', maxLength: 60, placeholder: 'Например: Обед' });
+  const firstDay = h('input', { type: 'date', value: todayIn() });
+  const lastDay = h('input', { type: 'date', value: todayIn() });
+  const wholeDay = h('input', { type: 'checkbox', id: 'whole-day' });
+  const startTime = h('input', { type: 'time', value: '13:00', step: 900 });
+  const endTime = h('input', { type: 'time', value: '14:00', step: 900 });
+  const errors = Object.fromEntries(['title', 'firstDay', 'lastDay', 'endTime', 'emoji'].map((k) => [k, h('div', { class: 'error' })]));
+  const error = h('div', { class: 'error', role: 'alert' });
+  const kindBox = h('div', { class: 'segments' });
+  const whenBox = h('div', {});
+  const timeBox = h('div', { class: 'time-pair' }, h('label', { class: 'field' }, h('span', {}, 'С'), startTime),
+    h('label', { class: 'field' }, h('span', {}, 'До'), endTime, errors.endTime));
+  const emojiBox = h('div', { class: 'emoji-pick', role: 'group', 'aria-label': 'Значок' });
+
+  function draw() {
+    kindBox.replaceChildren(
+      h('button', { type: 'button', 'aria-pressed': String(weekly), onclick: () => { weekly = true; draw(); } }, 'Каждую неделю'),
+      h('button', { type: 'button', 'aria-pressed': String(!weekly), onclick: () => { weekly = false; draw(); } }, 'По датам'));
+    whenBox.replaceChildren(...(weekly
+      ? [h('div', { class: 'field' }, h('span', {}, 'День недели'), h('div', { class: 'weekdays' }, WEEKDAY_NAMES.map(([code, name]) => h('button', {
+        type: 'button', class: 'day', 'aria-pressed': String(weekday === code), onclick: () => { weekday = code; draw(); },
+      }, name))))]
+      : [h('label', { class: 'field' }, h('span', {}, 'С даты'), firstDay, errors.firstDay),
+        h('label', { class: 'field' }, h('span', {}, 'По дату (включительно)'), lastDay, errors.lastDay)]));
+    timeBox.hidden = wholeDay.checked;
+    emojiBox.replaceChildren(...TIME_OFF_EMOJI.map((e) => h('button', {
+      type: 'button', class: 'day', 'aria-pressed': String(emoji === e), onclick: () => { emoji = e; draw(); },
+    }, e)));
+  }
+  wholeDay.addEventListener('change', draw);
+  firstDay.addEventListener('change', () => { if (lastDay.value < firstDay.value) lastDay.value = firstDay.value; });
+
+  render(h('section', { class: 'screen' }, backButton.link(), h('h1', {}, 'Новый перерыв'),
+    kindBox, whenBox,
+    h('label', { class: 'consent', for: 'whole-day' }, wholeDay, ' Весь день (выходной, отпуск)'),
+    timeBox,
+    h('label', { class: 'field' }, h('span', {}, 'Название'), title, errors.title),
+    h('div', { class: 'field' }, h('span', {}, 'Значок'), emojiBox, errors.emoji),
+    error));
+  draw();
+  mainButton.set('Сохранить', async () => {
+    Object.values(errors).forEach((e) => { e.textContent = ''; });
+    error.textContent = '';
+    mainButton.busy(true);
+    const body = {
+      weekday: weekly ? weekday : null,
+      firstDay: weekly ? null : firstDay.value || null,
+      lastDay: weekly ? null : lastDay.value || null,
+      startTime: wholeDay.checked ? null : startTime.value || null,
+      endTime: wholeDay.checked ? null : endTime.value || null,
+      title: title.value,
+      emoji,
+    };
+    try {
+      await api('POST', '/api/time-off', body);
+      haptic('success');
+      back();
+    } catch (e) {
+      mainButton.busy(false);
+      if (fatal(e)) return;
+      const f = e instanceof ApiError ? e.fields : {};
+      Object.entries(errors).forEach(([k, el]) => { el.textContent = f[k] || ''; });
+      if (!Object.keys(errors).some((k) => f[k])) error.textContent = errorText(e);
+    }
+  });
 }
 
 // ---------- Услуги (самозапись) ----------

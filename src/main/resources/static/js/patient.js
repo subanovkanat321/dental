@@ -1,6 +1,6 @@
 // Самозапись пациента: всё, что видит в Mini App не-врач. Общие кусочки (DOM, запросы,
 // кнопки Telegram) приходят из app.js параметром ui — без циклических импортов.
-import { todayIn, timeOf, toInstant, formatPhone, bookingDays, whenText, serviceEmoji } from './state.js';
+import { todayIn, timeOf, toInstant, formatPhone, bookingDays, whenText, serviceEmoji, breakNote } from './state.js';
 
 const STATUS = {
   REQUESTED: '⏳ Ждёт подтверждения врача — ответ придёт в этот чат',
@@ -125,10 +125,13 @@ function bookScreen(ui, me) {
     }
     if (mine !== seq) return;
     const starts = slots.starts.map(timeOf);
-    grid.replaceChildren(...(starts.length ? starts.map((t) => h('button', {
+    // Перерыв или выходной — подписью над сеткой, чтобы было понятно, куда делось время
+    const notes = [...slots.breaks, slots.dayOff].filter(Boolean)
+      .map((b) => h('div', { class: 'break-note' }, breakNote(b)));
+    grid.replaceChildren(...notes, ...(starts.length ? starts.map((t) => h('button', {
       type: 'button', class: 'slot time', 'aria-pressed': String(t === chosen),
       onclick: () => { chosen = t; timeError.textContent = ''; markChosen(); },
-    }, t)) : [h('div', { class: 'hint' }, slots.workingDay ? 'На этот день свободного времени нет' : 'Выходной')]));
+    }, t)) : [h('div', { class: 'hint' }, slots.dayOff ? 'Выберите другой день' : slots.workingDay ? 'На этот день свободного времени нет' : 'Выходной')]));
   }
 
   function markChosen() {

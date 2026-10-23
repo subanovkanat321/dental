@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  rowState, serviceEmoji, stripDays, recordsPhrase, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
+  rowState, serviceEmoji, stripDays, recordsPhrase, breakNote, timeOffWhen, todayIn, addDays, toInstant, timeOf, dayTitle, canMarkVisit, formatPhone, looksLikePhone,
   dayItems, windowDuration, fitsWindow, weekLabel, noShowPercent, averageNoShows, noShowsPhrase, recallText, agoText, bookingDays, freeSlotText, whenText, reminderText, whatsappUrl, isReady, readyCount, nextToRemind, canRemind,
 } from '../../main/resources/static/js/state.js';
 
@@ -203,4 +203,17 @@ test('stripDays: с сегодняшнего; дата вне ленты — л�
 
 test('recordsPhrase: 1 запись, 3 записи, 5 записей, 11 записей, 22 записи', () => {
   assert.deepEqual([1, 3, 5, 11, 22].map(recordsPhrase), ['1 запись', '3 записи', '5 записей', '11 записей', '22 записи']);
+});
+
+test('breakNote: перерыв пациенту и выходной на весь день', () => {
+  assert.equal(breakNote({ start: '2026-10-23T07:00:00Z', end: '2026-10-23T09:00:00Z', title: 'Джума-намаз', emoji: '🕌' }),
+    '🕌 С 13:00 до 15:00 — джума-намаз, врач не принимает');
+  assert.equal(breakNote({ start: null, end: null, title: 'Отпуск', emoji: '🏖️' }), '🏖️ Отпуск — в этот день приёма нет');
+});
+
+test('timeOffWhen: каждую пятницу, каждый понедельник, даты', () => {
+  assert.equal(timeOffWhen({ weekday: 'FRIDAY', startTime: '13:00:00', endTime: '15:00:00' }), 'Каждую пятницу · 13:00–15:00');
+  assert.equal(timeOffWhen({ weekday: 'MONDAY', startTime: null }), 'Каждый понедельник · весь день');
+  assert.equal(timeOffWhen({ weekday: null, firstDay: '2026-11-02', lastDay: '2026-11-08', startTime: null }), '2 нояб – 8 нояб · весь день');
+  assert.equal(timeOffWhen({ weekday: null, firstDay: '2026-11-02', lastDay: '2026-11-02', startTime: '10:00:00', endTime: '11:00:00' }), '2 нояб · 10:00–11:00');
 });

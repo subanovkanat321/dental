@@ -38,6 +38,18 @@ export function signInitData(userId = DOCTOR, authDate = Math.floor(Date.now() /
 
 export async function resetDb() {
   await db.query('truncate waitlist_entry, appointment, patient, telegram_contact restart identity cascade');
+  // Перерывы — как после миграции V7: только пятничный джума-намаз
+  await db.query('delete from time_off');
+  await db.query(`insert into time_off (weekday, start_time, end_time, title, emoji)
+    values (5, '13:00', '15:00', 'Джума-намаз', '🕌')`);
+}
+
+/** Ближайшая дата с этим днём недели (1 — пн … 7 — вс), не раньше чем через minDays дней. */
+export function nextWeekday(weekday, minDays = 0) {
+  for (let i = minDays; ; i += 1) {
+    const d = addDays(today(), i);
+    if ((new Date(`${d}T00:00:00Z`).getUTCDay() || 7) === weekday) return d;
+  }
 }
 
 export async function addPatient(fullName, phone = `99655${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`) {

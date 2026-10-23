@@ -5,6 +5,7 @@ import java.util.List;
 
 import kg.dental.appointment.AppointmentStatus;
 import kg.dental.appointment.AppointmentView;
+import kg.dental.appointment.SlotsView;
 import kg.dental.servicetype.ServiceTypeView;
 
 /** Ответы API самозаписи. Пациент видит только своё: ни чужих имён, ни расписания целиком. */
@@ -32,8 +33,11 @@ final class BookingViews {
 			List<ServiceTypeView> services, String clinicContact, int daysAhead) {
 	}
 
-	/** Свободные начала для услуги в день — без чужих приёмов. */
-	record Slots(boolean workingDay, List<Instant> starts) {
+	/**
+	 * Свободные начала для услуги в день — без чужих приёмов. Перерывы и выходной — с подписью
+	 * («🕌 Джума-намаз»): пациенту понятно, почему этого времени нет.
+	 */
+	record Slots(boolean workingDay, List<Instant> starts, List<SlotsView.Break> breaks, SlotsView.Break dayOff) {
 	}
 
 }

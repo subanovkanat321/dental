@@ -130,6 +130,17 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 .row.free .time { color: var(--accent); font-weight: 600; font-size: 1.05rem; }
 .row.free .hint { color: var(--accent); }
 .row.free .hint::before { content: "＋ "; font-weight: 700; }
+/* Перерыв (джума-намаз, обед): мягкая полоса, не нажимается */
+.row.pause {
+  min-height: 52px; cursor: default; box-shadow: none;
+  background: repeating-linear-gradient(135deg, var(--accent-soft) 0 10px, transparent 10px 20px), var(--card);
+}
+.row.pause .time { font-size: 1.05rem; color: var(--hint); }
+.row.pause .name { font-weight: 600; }
+.break-note {
+  grid-column: 1 / -1; padding: 12px 14px; border-radius: 12px; font-size: .92rem; line-height: 1.35;
+  background: var(--accent-soft); color: var(--text);
+}
 .row.struck { opacity: .6; }
 .row.struck .name, .row.struck .time { text-decoration: line-through; color: var(--hint); }
 
@@ -266,3 +277,17 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 #toast button { border: 0; background: none; color: #5eead4; font-weight: 700; min-height: 44px; cursor: pointer; }
 @keyframes toast-in { from { transform: translateY(12px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+.slots > .hint { grid-column: 1 / -1; }
+
+/* Перерывы и выходные */
+.timeoff { display: flex; align-items: center; gap: 12px; margin: 10px 0; padding: 12px 14px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); }
+.timeoff-emoji { font-size: 1.6rem; }
+.timeoff-text { flex: 1; }
+.timeoff-title { font-weight: 600; }
+.danger-link { color: var(--destructive); }
+.weekdays, .emoji-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.weekdays .day { min-width: 48px; }
+.emoji-pick .day { min-width: 48px; font-size: 1.3rem; }
+.time-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.time-pair .field { margin: 12px 0; }
+.screen > .segments { margin: 8px 0 4px; }

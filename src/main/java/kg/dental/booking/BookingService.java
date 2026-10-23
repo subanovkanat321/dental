@@ -83,13 +83,13 @@ class BookingService {
 		requireEnabled();
 		var today = LocalDate.ofInstant(clock.instant(), properties.timeZone());
 		if (date.isBefore(today) || date.isAfter(today.plusDays(booking.daysAhead()))) {
-			return new BookingViews.Slots(false, List.of());
+			return new BookingViews.Slots(false, List.of(), List.of(), null);
 		}
 		var service = services.requireActive(serviceTypeId);
 		var day = slots.slots(date, Duration.ofMinutes(service.getDurationMinutes()), null);
 		var earliest = earliest();
 		return new BookingViews.Slots(day.workingDay(),
-				day.starts().stream().filter(start -> !start.isBefore(earliest)).toList());
+				day.starts().stream().filter(start -> !start.isBefore(earliest)).toList(), day.breaks(), day.dayOff());
 	}
 
 	@Transactional

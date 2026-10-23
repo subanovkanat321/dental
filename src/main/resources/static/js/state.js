@@ -85,9 +85,37 @@ export function looksLikePhone(text) {
  * Строки «Дня»: приёмы и окна «свободно» (DD2) по времени начала.
  * Окно — { free: true, startAt, endAt }; приём — как пришёл из API.
  */
-export function dayItems(appointments, free) {
+export function dayItems(appointments, free, breaks = []) {
   const windows = free.map((w) => ({ free: true, startAt: w.start, endAt: w.end }));
-  return [...appointments, ...windows].sort((x, y) => new Date(x.startAt) - new Date(y.startAt));
+  const pauses = breaks.map((b) => ({ pause: true, startAt: b.start, endAt: b.end, title: b.title, emoji: b.emoji }));
+  return [...appointments, ...windows, ...pauses].sort((x, y) => new Date(x.startAt) - new Date(y.startAt));
+}
+
+/**
+ * Пациенту — почему этого времени нет: «🕌 С 13:00 до 15:00 — джума-намаз, врач не принимает».
+ * Выходной на весь день: «🏖️ Отпуск — в этот день приёма нет».
+ */
+export function breakNote(b) {
+  if (!b.start) return `${b.emoji} ${b.title} — в этот день приёма нет`;
+  const title = b.title.charAt(0).toLowerCase() + b.title.slice(1);
+  return `${b.emoji} С ${timeOf(b.start)} до ${timeOf(b.end)} — ${title}, врач не принимает`;
+}
+
+const WEEKDAYS = { MONDAY: 'понедельник', TUESDAY: 'вторник', WEDNESDAY: 'среду', THURSDAY: 'четверг',
+  FRIDAY: 'пятницу', SATURDAY: 'субботу', SUNDAY: 'воскресенье' };
+
+/** Перерыв в списке врача: «Каждую пятницу · 13:00–15:00», «24–30 окт · весь день». */
+export function timeOffWhen(t) {
+  const hours = t.startTime ? `${t.startTime.slice(0, 5)}–${t.endTime.slice(0, 5)}` : 'весь день';
+  if (t.weekday) {
+    const every = t.weekday === 'WEDNESDAY' || t.weekday === 'FRIDAY' || t.weekday === 'SATURDAY' ? 'Каждую'
+      : t.weekday === 'SUNDAY' ? 'Каждое' : 'Каждый';
+    return `${every} ${WEEKDAYS[t.weekday]} · ${hours}`;
+  }
+  const fmt = (d) => new Intl.DateTimeFormat('ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'short' })
+    .format(new Date(`${d}T00:00:00Z`)).replace('.', '');
+  const days = t.firstDay === t.lastDay ? fmt(t.firstDay) : `${fmt(t.firstDay)} – ${fmt(t.lastDay)}`;
+  return `${days} · ${hours}`;
 }
 
 /** Нажатие на «свободно»: длительность min(30, длина окна) — окно всегда ≥ 15 минут (ER4). */
