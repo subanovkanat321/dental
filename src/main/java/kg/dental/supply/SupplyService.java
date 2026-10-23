@@ -51,6 +51,40 @@ public class SupplyService {
 		return require(id);
 	}
 
+	/** Типовой набор расходников кабинета: название, единица, сколько есть, порог. */
+	record Sample(String name, String unit, int quantity, int minQuantity) {
+	}
+
+	/**
+	 * Несколько — на пороге: одно «−1» покажет, как бот пишет «⚠️ Заканчивается». «Нагрудники»
+	 * уже ниже порога — видно, как выглядит «мало».
+	 */
+	static final List<Sample> SAMPLES = List.of(
+			new Sample("Карпула артикаин 4%", "шт", 50, 10), new Sample("Карпула лидокаин 2%", "шт", 20, 5),
+			new Sample("Иглы карпульные", "шт", 100, 20), new Sample("Перчатки нитриловые M", "уп", 8, 2),
+			new Sample("Перчатки нитриловые S", "уп", 3, 2), new Sample("Маски медицинские", "уп", 6, 2),
+			new Sample("Нагрудники одноразовые", "уп", 1, 2), new Sample("Слюноотсосы", "уп", 4, 1),
+			new Sample("Ватные валики", "уп", 10, 3), new Sample("Композит A2", "шт", 6, 2),
+			new Sample("Композит A3", "шт", 3, 2), new Sample("Адгезив (бонд)", "шт", 2, 1),
+			new Sample("Протравочный гель", "шт", 4, 1), new Sample("Боры алмазные", "шт", 40, 10),
+			new Sample("Эндодонтические файлы", "уп", 5, 2), new Sample("Слепочная масса", "уп", 3, 1),
+			new Sample("Временная пломба", "шт", 5, 2), new Sample("Ретракционная нить", "шт", 2, 1),
+			new Sample("Шприцы 5 мл", "шт", 30, 10), new Sample("Стерилизационные пакеты", "уп", 6, 2),
+			new Sample("Дезинфицирующий раствор", "л", 5, 2));
+
+	/** Добавить типовой набор; что уже есть (по названию) — не трогает. @return сколько добавлено */
+	@Transactional
+	public int addSamples(Long doctorId) {
+		var added = 0;
+		for (var s : SAMPLES) {
+			if (!query.nameTaken(s.name(), 0)) {
+				create(s.name(), s.unit(), s.quantity(), s.minQuantity(), doctorId);
+				added++;
+			}
+		}
+		return added;
+	}
+
 	@Transactional
 	public SupplyView update(long id, String name, String unit, Integer minQuantity) {
 		require(id);

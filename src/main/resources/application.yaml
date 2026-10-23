@@ -10,6 +10,11 @@ server:
 spring:
   application:
     name: dental
+  # Тексты бота для пациента: messages.properties (ru) и messages_ky.properties.
+  # Без перевода ключа — русский, а не язык сервера
+  messages:
+    basename: messages
+    fallback-to-system-locale: false
   lifecycle:
     timeout-per-shutdown-phase: 20s
   web:

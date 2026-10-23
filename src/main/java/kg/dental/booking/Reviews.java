@@ -14,9 +14,10 @@ import java.util.stream.IntStream;
 
 import kg.dental.DentalProperties;
 import kg.dental.appointment.AppointmentService;
-import kg.dental.appointment.ReviewRequest;
 import kg.dental.digest.DoctorNotifier;
 import kg.dental.digest.NotifyProperties;
+import kg.dental.patient.Lang;
+import kg.dental.patient.PatientTexts;
 import kg.dental.telegram.BotCallbacks;
 import kg.dental.telegram.TelegramClient;
 import kg.dental.telegram.TelegramException;
@@ -55,8 +56,11 @@ class Reviews implements SchedulingConfigurer, BotCallbacks {
 
 	private final Clock clock;
 
+	private final PatientTexts texts;
+
 	Reviews(AppointmentService appointments, TelegramClient telegram, DoctorNotifier notifier, NotifyProperties notify,
-			DentalProperties properties, Clock clock) {
+			DentalProperties properties, Clock clock, PatientTexts texts) {
+		this.texts = texts;
 		this.appointments = appointments;
 		this.telegram = telegram;
 		this.notifier = notifier;
@@ -89,7 +93,8 @@ class Reviews implements SchedulingConfigurer, BotCallbacks {
 			var sent = 0;
 			for (var r : requests) {
 				try {
-					telegram.sendKeyboard(r.telegramId(), askText(r), List.of(stars(r.appointmentId())));
+					telegram.sendKeyboard(r.telegramId(), texts.get(texts.langOf(r.telegramId()), "review.ask", r.fullName()),
+							List.of(stars(r.appointmentId())));
 					sent++;
 				}
 				catch (TelegramException e) {
@@ -112,25 +117,17 @@ class Reviews implements SchedulingConfigurer, BotCallbacks {
 			return Optional.empty();
 		}
 		var rating = Integer.parseInt(match.group(2));
+		var lang = texts.langOf(fromId);
 		var rated = appointments.rateFromBot(Long.parseLong(match.group(1)), fromId, rating);
 		if (rated.isEmpty()) {
-			return Optional.of(new Answer("Оценка уже сохранена", null));
+			return Optional.of(new Answer(texts.get(lang, "review.already"), null));
 		}
 		if (notifier.enabled()) {
 			notifier.send(rated.get().doctorId(), "Оценка приёма",
 					doctorText(rated.get().startAt(), rating, properties.timeZone()), List.of());
 		}
-		return Optional.of(new Answer("Спасибо за оценку!", thanksText(rating)));
-	}
-
-	static String askText(ReviewRequest r) {
-		return "Здравствуйте, " + r.fullName() + "! Как прошёл вчерашний приём у стоматолога? "
-				+ "Оцените, пожалуйста, — это займёт секунду 🙏";
-	}
-
-	static String thanksText(int rating) {
-		return rating >= 4 ? "Спасибо за оценку! Рады, что всё прошло хорошо 😊 Будем ждать вас снова."
-				: "Спасибо, что честно. Нам жаль, что что-то не понравилось — врач увидит вашу оценку и постарается стать лучше.";
+		return Optional.of(new Answer(texts.get(lang, "review.thanks.popup"),
+				texts.get(lang, rating >= 4 ? "review.thanks.good" : "review.thanks.bad")));
 	}
 
 	static String doctorText(Instant startAt, int rating, ZoneId zone) {

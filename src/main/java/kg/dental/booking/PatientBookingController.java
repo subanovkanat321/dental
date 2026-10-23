@@ -2,14 +2,19 @@ package kg.dental.booking;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import kg.dental.auth.InitDataAuthFilter;
+import kg.dental.patient.ChatLanguages;
+import kg.dental.patient.Lang;
+import kg.dental.shared.InvalidFieldException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,8 +38,24 @@ class PatientBookingController {
 
 	private final BookingService service;
 
-	PatientBookingController(BookingService service) {
+	private final ChatLanguages languages;
+
+	PatientBookingController(BookingService service, ChatLanguages languages) {
 		this.service = service;
+		this.languages = languages;
+	}
+
+	record Language(String lang) {
+	}
+
+	/** Переключатель «Русский / Кыргызча»: на этом языке дальше пишет и бот (напоминания, ответы). */
+	@PutMapping("/language")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	void language(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long telegramId, @RequestBody Language request) {
+		if (request.lang() == null || !List.of("ru", "ky").contains(request.lang())) {
+			throw new InvalidFieldException("lang", "Язык: ru или ky");
+		}
+		languages.set(telegramId, Lang.of(request.lang()));
 	}
 
 	@GetMapping("/me")

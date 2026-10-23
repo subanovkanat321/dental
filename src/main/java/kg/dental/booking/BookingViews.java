@@ -35,10 +35,11 @@ final class BookingViews {
 	 * @param clinic адрес (2ГИС) и техподдержка — пациенту и врачу
 	 * @param doctors работающие врачи: сотруднику — переключатель «Дня», пациенту — выбор врача
 	 * @param phone номер, которым человек поделился; null — ещё не делился
+	 * @param lang язык пациента «ru» / «ky»; null — ещё не выбран (Mini App возьмёт язык Telegram)
 	 */
 	record Me(boolean doctor, boolean admin, Long doctorId, boolean bookingEnabled, String fullName, String phone,
 			Booking booking, List<ServiceTypeView> services, String clinicContact, int daysAhead,
-			List<DoctorView> doctors, ClinicView clinic) {
+			List<DoctorView> doctors, ClinicView clinic, String lang) {
 	}
 
 	/**

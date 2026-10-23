@@ -9,7 +9,10 @@ import kg.dental.AssetVersion;
 import kg.dental.BookingProperties;
 import kg.dental.clinic.ClinicService;
 import kg.dental.doctor.Staff;
+import kg.dental.patient.ChatLanguages;
+import kg.dental.patient.Lang;
 import kg.dental.patient.PatientService;
+import kg.dental.patient.PatientTexts;
 import kg.dental.telegram.TelegramApi.CallbackQuery;
 import kg.dental.telegram.TelegramApi.Update;
 import org.slf4j.Logger;
@@ -42,9 +45,15 @@ class BotUpdateHandler {
 
 	private final ClinicService clinics;
 
+	private final PatientTexts texts;
+
+	private final ChatLanguages languages;
+
 	BotUpdateHandler(TelegramClient telegram, TelegramProperties properties, AssetVersion version,
 			BookingProperties booking, PatientService patients, List<BotCallbacks> callbacks, Staff staff,
-			ClinicService clinics) {
+			ClinicService clinics, PatientTexts texts, ChatLanguages languages) {
+		this.texts = texts;
+		this.languages = languages;
 		this.staff = staff;
 		this.clinics = clinics;
 		this.telegram = telegram;
@@ -86,25 +95,28 @@ class BotUpdateHandler {
 			return;
 		}
 		var chatId = message.chat().id();
+		var isStaff = staff.isStaff(message.from().id());
+		// Врачам — по-русски; пациенту — его язык (первый раз — из настроек Telegram)
+		var lang = isStaff ? Lang.RU : languages.detect(message.from().id(), message.from().languageCode());
 		// Поделился номером для самозаписи. Только свой номер: user_id контакта — тот же, кто пишет,
 		// иначе можно было бы прислать чужой контакт из записной книжки
 		var contact = message.contact();
 		if (contact != null && contact.userId() != null && contact.userId() == message.from().id()) {
 			if (patients.saveContact(message.from().id(), contact.phoneNumber(), contact.firstName())) {
-				telegram.sendMessage(chatId, BotTexts.CONTACT_SAVED);
+				telegram.sendMessage(chatId, texts.get(lang, "bot.contact-saved"));
 			}
 			return;
 		}
 		var text = message.text() == null ? "" : message.text().strip();
 		// /help — любому: куда обращаться (клиника, техподдержка)
 		if (text.startsWith("/help")) {
-			sendHelp(chatId);
+			sendHelp(chatId, lang);
 			return;
 		}
 		var start = text.startsWith("/start");
-		if (!staff.isStaff(message.from().id())) {
+		if (!isStaff) {
 			if (start) {
-				greetPatient(chatId);
+				greetPatient(chatId, lang);
 			}
 			return;
 		}
@@ -126,7 +138,7 @@ class BotUpdateHandler {
 			.map(c -> c.handle(query.from().id(), query.data()))
 			.flatMap(Optional::stream)
 			.findFirst()
-			.orElse(new BotCallbacks.Answer(BotTexts.STALE_BUTTON, null));
+			.orElseGet(() -> new BotCallbacks.Answer(texts.get(texts.langOf(query.from().id()), "bot.stale"), null));
 		telegram.answerCallbackQuery(query.id(), answer.popup());
 		var message = query.message();
 		if (message != null && message.chat() != null && "private".equals(message.chat().type())) {
@@ -143,16 +155,16 @@ class BotUpdateHandler {
 		}
 	}
 
-	private void sendHelp(long chatId) {
+	private void sendHelp(long chatId, Lang lang) {
 		var clinic = clinics.view();
 		var buttons = new ArrayList<TelegramClient.Button>();
 		if (clinic.supportUrl() != null) {
-			buttons.add(TelegramClient.Button.link("🛟 Написать в техподдержку", URI.create(clinic.supportUrl())));
+			buttons.add(TelegramClient.Button.link(texts.get(lang, "help.support-button"), URI.create(clinic.supportUrl())));
 		}
 		if (clinic.mapUrl() != null) {
-			buttons.add(TelegramClient.Button.link("📍 Как добраться (2ГИС)", URI.create(clinic.mapUrl())));
+			buttons.add(TelegramClient.Button.link(texts.get(lang, "clinic.map-button"), URI.create(clinic.mapUrl())));
 		}
-		telegram.sendMessage(chatId, BotTexts.help(clinic, properties.clinicContact()), buttons);
+		telegram.sendMessage(chatId, BotTexts.help(texts, lang, clinic, properties.clinicContact()), buttons);
 	}
 
 	private void greet(long chatId, long updateId) {
@@ -167,15 +179,15 @@ class BotUpdateHandler {
 	}
 
 	/** Постороннему: кнопка самозаписи, если она включена и Mini App доступна; иначе — контакт клиники. */
-	private void greetPatient(long chatId) {
+	private void greetPatient(long chatId, Lang lang) {
 		if (!booking.enabled() || !miniAppAvailable()) {
-			telegram.sendMessage(chatId, BotTexts.stranger(properties.clinicContact()));
+			telegram.sendMessage(chatId, BotTexts.stranger(texts, lang, properties.clinicContact()));
 			return;
 		}
 		var url = version.miniApp(properties.publicUrl(), null);
-		telegram.sendMessage(chatId, BotTexts.patientWelcome(properties.clinicContact()),
-				List.of(new TelegramClient.Button(BotTexts.BOOK_BUTTON, url)));
-		telegram.setChatMenuButton(chatId, "Записаться", url);
+		telegram.sendMessage(chatId, BotTexts.patientWelcome(texts, lang, properties.clinicContact()),
+				List.of(new TelegramClient.Button(texts.get(lang, "bot.book-button"), url)));
+		telegram.setChatMenuButton(chatId, texts.get(lang, "bot.menu-button"), url);
 	}
 
 	private void setMenuButton(long chatId) {

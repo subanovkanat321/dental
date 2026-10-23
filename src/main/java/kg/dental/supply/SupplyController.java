@@ -54,6 +54,15 @@ class SupplyController {
 		return service.create(r.name(), r.unit(), r.quantity(), r.minQuantity(), staff.doctorIdOf(me).orElse(null));
 	}
 
+	record Added(int added) {
+	}
+
+	/** «Добавить типовой набор» — чтобы сразу показать склад и попробовать, не вводя всё руками. */
+	@PostMapping("/api/supplies/samples")
+	Added samples(@RequestAttribute(InitDataAuthFilter.TELEGRAM_ID) long me) {
+		return new Added(service.addSamples(staff.doctorIdOf(me).orElse(null)));
+	}
+
 	@PutMapping("/api/supplies/{id}")
 	SupplyView update(@PathVariable long id, @RequestBody Update r) {
 		return service.update(id, r.name(), r.unit(), r.minQuantity());

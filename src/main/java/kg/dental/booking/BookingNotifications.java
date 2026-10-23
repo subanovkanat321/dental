@@ -13,7 +13,9 @@ import kg.dental.appointment.AppointmentView;
 import kg.dental.appointment.RequestDecided;
 import kg.dental.clinic.ClinicService;
 import kg.dental.digest.DoctorNotifier;
+import kg.dental.patient.Lang;
 import kg.dental.patient.PatientService;
+import kg.dental.patient.PatientTexts;
 import kg.dental.telegram.TelegramClient;
 import kg.dental.telegram.TelegramProperties;
 import org.springframework.stereotype.Component;
@@ -31,8 +33,6 @@ class BookingNotifications {
 
 	private static final DateTimeFormatter SHORT = DateTimeFormatter.ofPattern("EEE, d MMM, HH:mm", RU);
 
-	private static final DateTimeFormatter LONG = DateTimeFormatter.ofPattern("EEEE, d MMMM, в HH:mm", RU);
-
 	private final DoctorNotifier notifier;
 
 	private final AppointmentService appointments;
@@ -45,8 +45,11 @@ class BookingNotifications {
 
 	private final ClinicService clinics;
 
+	private final PatientTexts texts;
+
 	BookingNotifications(DoctorNotifier notifier, AppointmentService appointments, PatientService patients,
-			TelegramProperties telegram, DentalProperties properties, ClinicService clinics) {
+			TelegramProperties telegram, DentalProperties properties, ClinicService clinics, PatientTexts texts) {
+		this.texts = texts;
 		this.clinics = clinics;
 		this.notifier = notifier;
 		this.appointments = appointments;
@@ -94,16 +97,17 @@ class BookingNotifications {
 		}
 		var a = appointments.get(event.appointmentId());
 		var clinic = clinics.view();
-		var text = decidedText(a, event.confirmed(), telegram.clinicContact(), properties.timeZone());
-		if (event.confirmed() && clinic.address() != null) {
-			text += "\n📍 Адрес: " + clinic.address();
-		}
-		var finalText = text;
-		var map = event.confirmed() ? PatientReminders.mapButton(clinic) : List.<TelegramClient.Button>of();
-		patients.telegramIdOf(a.patient().id())
-			.ifPresent(chatId -> notifier.sendToPatient(chatId, event.confirmed() ? "Заявка подтверждена" : "Заявка отклонена",
-					finalText, List.of(new DoctorNotifier.Link(event.confirmed() ? "Моя запись" : "Выбрать другое время", null)),
-					map));
+		patients.telegramIdOf(a.patient().id()).ifPresent(chatId -> {
+			var lang = texts.langOf(chatId);
+			var text = decidedText(texts, lang, a, event.confirmed(), telegram.clinicContact(), properties.timeZone());
+			if (event.confirmed() && clinic.address() != null) {
+				text += "\n" + texts.get(lang, "clinic.address", clinic.address());
+			}
+			var map = event.confirmed() ? PatientReminders.mapButton(texts, lang, clinic) : List.<TelegramClient.Button>of();
+			var button = texts.get(lang, event.confirmed() ? "decided.mine-button" : "decided.other-button");
+			notifier.sendToPatient(chatId, event.confirmed() ? "Заявка подтверждена" : "Заявка отклонена", text,
+					List.of(new DoctorNotifier.Link(button, null)), map);
+		});
 	}
 
 	/** «Новая заявка: вт, 24 окт, 10:00 — Осмотр и консультация (30 мин).» */
@@ -113,14 +117,15 @@ class BookingNotifications {
 				+ " мин). Подтвердите или отклоните в приложении.";
 	}
 
-	static String decidedText(AppointmentView a, boolean confirmed, String clinicContact, ZoneId zone) {
-		var when = LONG.format(a.startAt().atZone(zone));
+	/** Услугу (её название) врач вводит по-русски — она остаётся как есть и в кыргызском тексте. */
+	static String decidedText(PatientTexts texts, Lang lang, AppointmentView a, boolean confirmed, String clinicContact,
+			ZoneId zone) {
+		var when = lang.dateTime(a.startAt().atZone(zone));
 		if (confirmed) {
-			var text = "Ваша запись к стоматологу подтверждена: " + when + " — " + a.serviceName() + "."
-					+ " Если планы изменятся, отмените запись в приложении.";
-			return clinicContact.isEmpty() ? text : text + " Телефон клиники: " + clinicContact;
+			var text = texts.get(lang, "decided.confirmed", when, a.serviceName());
+			return clinicContact.isEmpty() ? text : text + texts.get(lang, "bot.clinic-phone", clinicContact);
 		}
-		return "К сожалению, время " + when + " недоступно. Выберите, пожалуйста, другое.";
+		return texts.get(lang, "decided.rejected", when);
 	}
 
 	private static String shortTime(Instant instant, ZoneId zone) {

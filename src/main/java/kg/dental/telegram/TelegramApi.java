@@ -42,7 +42,8 @@ public final class TelegramApi {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	public record User(long id) {
+	/** @param languageCode язык интерфейса Telegram у человека («ru», «ky»…); может не быть */
+	public record User(long id, @JsonProperty("language_code") String languageCode) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)

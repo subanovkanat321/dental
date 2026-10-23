@@ -136,6 +136,17 @@ class SupplyApiTests {
 	}
 
 	@Test
+	void samplesAreAddedOnceAndKeepExisting() {
+		create("Композит A2", "шт", 99, 0);
+
+		assertThat(post("/api/supplies/samples", "")).hasStatusOk().bodyJson().extractingPath("$.added")
+			.isEqualTo(SupplyService.SAMPLES.size() - 1);
+		assertThat(post("/api/supplies/samples", "")).bodyJson().extractingPath("$.added").isEqualTo(0);
+		assertThat(jdbc.queryForObject("select quantity from supply where name = 'Композит A2'", Integer.class)).isEqualTo(99);
+		assertThat(jdbc.queryForObject("select count(*) from supply where quantity <= min_quantity", Integer.class)).isEqualTo(1);
+	}
+
+	@Test
 	void patientCannotSeeSupplies() {
 		assertThat(mvc.get().uri("/api/supplies").header(HttpHeaders.AUTHORIZATION, tma(TestInitData.STRANGER_ID)))
 			.hasStatus(HttpStatus.FORBIDDEN);

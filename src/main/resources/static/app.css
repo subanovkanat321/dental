@@ -414,3 +414,11 @@ button:active:not(:disabled), a.btn:active { transform: scale(.98); }
 .pair .btn { margin: 0; justify-content: center; }
 .units { display: flex; gap: 8px; margin-bottom: 8px; }
 .units .btn { flex: 1; margin: 0; min-height: 40px; padding: 8px; justify-content: center; }
+
+/* ---------- Язык пациента: «Русский | Кыргызча» над шапкой ---------- */
+.lang-switch { display: flex; justify-content: flex-end; gap: 4px; margin: 0 0 8px; }
+.lang-switch button {
+  border: 1px solid var(--separator); border-radius: 999px; padding: 6px 12px; background: var(--card);
+  color: var(--hint); font-size: .85rem; font-weight: 600; cursor: pointer;
+}
+.lang-switch button[aria-pressed=true] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }

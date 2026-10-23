@@ -20,7 +20,9 @@ import kg.dental.appointment.PatientReply;
 import kg.dental.clinic.ClinicService;
 import kg.dental.clinic.ClinicView;
 import kg.dental.digest.DoctorNotifier;
+import kg.dental.patient.Lang;
 import kg.dental.patient.PatientService;
+import kg.dental.patient.PatientTexts;
 import kg.dental.shared.ConflictException;
 import kg.dental.telegram.BotCallbacks;
 import kg.dental.telegram.TelegramClient;
@@ -61,9 +63,12 @@ class PatientReminders implements BotCallbacks {
 
 	private final ClinicService clinics;
 
+	private final PatientTexts texts;
+
 	PatientReminders(AppointmentService appointments, PatientService patients, TelegramClient telegram,
 			DoctorNotifier notifier, TelegramProperties telegramProperties, DentalProperties properties, Clock clock,
-			ClinicService clinics) {
+			ClinicService clinics, PatientTexts texts) {
+		this.texts = texts;
 		this.clinics = clinics;
 		this.appointments = appointments;
 		this.patients = patients;
@@ -91,10 +96,12 @@ class PatientReminders implements BotCallbacks {
 		}
 		try {
 			var clinic = clinics.view();
-			var buttons = new ArrayList<>(List.of(TelegramClient.Button.callback("Приду", "reply:" + id + ":C"),
-					TelegramClient.Button.callback("Нужно перенести", "reply:" + id + ":R")));
-			buttons.addAll(mapButton(clinic));
-			telegram.sendMessage(chatId, reminderText(a, properties.clinicSignature(), properties.timeZone(),
+			var lang = texts.langOf(chatId);
+			var buttons = new ArrayList<>(List.of(
+					TelegramClient.Button.callback(texts.get(lang, "reminder.coming"), "reply:" + id + ":C"),
+					TelegramClient.Button.callback(texts.get(lang, "reminder.reschedule"), "reply:" + id + ":R")));
+			buttons.addAll(mapButton(texts, lang, clinic));
+			telegram.sendMessage(chatId, reminderText(lang, a, properties.clinicSignature(),
 					LocalDate.now(clock.withZone(properties.timeZone())), clinic.address()), buttons);
 		}
 		catch (TelegramException e) {
@@ -113,36 +120,37 @@ class PatientReminders implements BotCallbacks {
 		}
 		var confirmed = "C".equals(match.group(2));
 		var reply = confirmed ? PatientReply.CONFIRMED : PatientReply.RESCHEDULE;
+		var lang = texts.langOf(fromId);
 		var result = appointments.replyFromBot(Long.parseLong(match.group(1)), fromId, reply);
 		if (result.isEmpty()) {
 			// Чужой id в подменённой кнопке или запись уже изменилась — ответ одинаковый
-			return Optional.of(new Answer("Эта запись уже изменилась — откройте приложение", null));
+			return Optional.of(new Answer(texts.get(lang, "bot.stale"), null));
 		}
 		var a = result.get().appointment();
 		if (result.get().changed() && notifier.enabled()) {
 			notifier.send(a.doctorId(), "Ответ на напоминание", doctorText(a, confirmed, properties.timeZone()),
 					List.of(new DoctorNotifier.Link("Открыть приём", "appointment=" + a.id())));
 		}
+		var zone = properties.timeZone();
 		return Optional.of(confirmed
-				? new Answer("Спасибо!", "Спасибо! Ждём вас " + when(a.startAt(), properties.timeZone(),
-						LocalDate.now(clock.withZone(properties.timeZone()))) + ".")
-				: new Answer("Передали врачу", rescheduleText(telegramProperties.clinicContact())));
+				? new Answer(texts.get(lang, "reply.coming.popup"), texts.get(lang, "reply.coming",
+						lang.when(a.startAt().atZone(zone), LocalDate.now(clock.withZone(zone)))))
+				: new Answer(texts.get(lang, "reply.reschedule.popup"), rescheduleText(lang, telegramProperties.clinicContact())));
 	}
 
 	/** «Здравствуйте, Айгуль! Напоминаем: завтра в 10:00 приём у стоматолога. …» — как в WhatsApp. */
-	static String reminderText(AppointmentView a, String signature, ZoneId zone, LocalDate today, String address) {
-		var text = "Здравствуйте, " + a.patient().fullName() + "! Напоминаем: " + when(a.startAt(), zone, today)
-				+ " приём у стоматолога. Нажмите кнопку ниже: «Приду» или «Нужно перенести».";
+	String reminderText(Lang lang, AppointmentView a, String signature, LocalDate today, String address) {
+		var text = texts.get(lang, "reminder.text", a.patient().fullName(), lang.when(a.startAt().atZone(properties.timeZone()), today));
 		if (address != null) {
-			text += "\n📍 Адрес: " + address;
+			text += "\n" + texts.get(lang, "clinic.address", address);
 		}
 		return signature == null || signature.isBlank() ? text : text + "\n" + signature;
 	}
 
 	/** «📍 Как добраться (2ГИС)» — если в «О клинике» есть ссылка; иначе без кнопки. */
-	static List<TelegramClient.Button> mapButton(ClinicView clinic) {
+	static List<TelegramClient.Button> mapButton(PatientTexts texts, Lang lang, ClinicView clinic) {
 		return clinic.mapUrl() == null ? List.of()
-				: List.of(TelegramClient.Button.link("📍 Как добраться (2ГИС)", URI.create(clinic.mapUrl())));
+				: List.of(TelegramClient.Button.link(texts.get(lang, "clinic.map-button"), URI.create(clinic.mapUrl())));
 	}
 
 	static String doctorText(AppointmentView a, boolean confirmed, ZoneId zone) {
@@ -152,22 +160,14 @@ class PatientReminders implements BotCallbacks {
 				: "Ответ на напоминание: приём " + time + " — пациент просит перенести. Откройте приём, чтобы связаться.";
 	}
 
-	static String rescheduleText(String clinicContact) {
-		var text = "Хорошо, передали врачу — с вами свяжутся, чтобы подобрать другое время.";
-		return clinicContact.isEmpty() ? text : text + " Телефон клиники: " + clinicContact;
+	private String rescheduleText(Lang lang, String clinicContact) {
+		var text = texts.get(lang, "reply.reschedule");
+		return clinicContact.isEmpty() ? text : text + texts.get(lang, "bot.clinic-phone", clinicContact);
 	}
 
-	/** «сегодня в 10:00», «завтра в 10:00» или «в четверг, 26 октября, в 10:00». */
+	/** «сегодня в 10:00», «завтра в 10:00» или «понедельник, 26 октября, в 10:00» — по-русски. */
 	static String when(Instant startAt, ZoneId zone, LocalDate today) {
-		var at = startAt.atZone(zone);
-		var time = "в " + TIME.format(at);
-		if (at.toLocalDate().equals(today)) {
-			return "сегодня " + time;
-		}
-		if (at.toLocalDate().equals(today.plusDays(1))) {
-			return "завтра " + time;
-		}
-		return DATE.format(at) + ", " + time;
+		return Lang.RU.when(startAt.atZone(zone), today);
 	}
 
 }

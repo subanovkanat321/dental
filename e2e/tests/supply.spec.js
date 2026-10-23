@@ -100,3 +100,13 @@ test('удалить услугу без записей — её больше н
   await expect(page.locator('#toast')).toHaveText('🗑️ Услуга удалена');
   await expect(page.getByRole('button', { name: /^Тест-услуга/ })).toHaveCount(0);
 });
+
+test('«Добавить типовой набор» — склад заполнен, на пороге уже что-то «мало»', async ({ page }) => {
+  await openSupplies(page);
+  await page.getByRole('button', { name: 'Добавить типовой набор' }).click();
+
+  await expect(page.locator('#toast')).toHaveText(/^✅ Добавлено материалов: \d+$/);
+  await expect(page.locator('.row.supply', { hasText: 'Карпула артикаин 4%' }).locator('.stock')).toHaveText('50 шт');
+  await expect(page.locator('.row.supply[data-tone=bad]').first()).toContainText('Нагрудники одноразовые');
+  expect((await db.query('select count(*)::int as n from supply')).rows[0].n).toBeGreaterThanOrEqual(20);
+});

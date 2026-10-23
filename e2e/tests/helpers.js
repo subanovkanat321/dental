@@ -39,6 +39,7 @@ export function signInitData(userId = DOCTOR, authDate = Math.floor(Date.now() /
 export async function resetDb() {
   await db.query('truncate waitlist_entry, appointment, patient, telegram_contact restart identity cascade');
   await db.query('delete from supply');
+  await db.query('delete from chat_language');
   // Врачи — как после миграции V11: один врач №1 без Telegram
   await db.query('delete from time_off where doctor_id is not null');
   await db.query('delete from doctor_hours');
@@ -78,10 +79,10 @@ export async function addAppointment(patientId, date, time, { status = 'SCHEDULE
  * MainButton, BackButton и openLink, которые записывают вызовы. Настоящий скрипт telegram.org
  * заблокирован — иначе он заменил бы заглушку.
  */
-export async function openApp(page, { path = '/', initData = signInitData(), shareContact } = {}) {
+export async function openApp(page, { path = '/', initData = signInitData(), shareContact, languageCode } = {}) {
   await page.route('https://telegram.org/**', (route) => route.abort());
   if (shareContact) await page.exposeFunction('shareContact', shareContact);
-  await page.addInitScript((data) => {
+  await page.addInitScript(({ data, languageCode }) => {
     window.__calls = [];
     const button = () => ({
       text: '', visible: false, handlers: [],
@@ -98,6 +99,8 @@ export async function openApp(page, { path = '/', initData = signInitData(), sha
     window.Telegram = {
       WebApp: {
         initData: data, colorScheme: 'light', platform: 'ios',
+        // Язык интерфейса Telegram — по нему Mini App выбирает язык пациента в первый раз
+        initDataUnsafe: { user: { language_code: languageCode } },
         ready() {}, expand() {}, onEvent() {},
         MainButton: button(), BackButton: button(),
         HapticFeedback: { notificationOccurred() {} },
@@ -109,7 +112,7 @@ export async function openApp(page, { path = '/', initData = signInitData(), sha
         },
       },
     };
-  }, initData);
+  }, { data: initData, languageCode });
   await page.goto(path);
 }
 

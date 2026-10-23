@@ -104,6 +104,7 @@ const ICONS = {
   'Отменить запись': '✖️',
   Повторить: '🔄',
   Склад: '📦',
+  'Добавить типовой набор': '📋',
   'Удалить запись': '🗑️',
   'Удалить услугу': '🗑️',
   'Удалить материал': '🗑️',
@@ -1656,7 +1657,22 @@ async function supplyScreen(back, openId) {
       ? h('p', { class: 'hint' }, low ? `⚠️ Пора заказать: ${low}. ` : '', 'Взяли материал — «−1». Пришла поставка — откройте материал.')
       : h('p', { class: 'hint' }, 'Добавьте расходники — карпулы, перчатки, слепочную массу. Когда материал дойдёт до порога, бот напишет всем: «Заканчивается».'),
     h('ul', { class: 'rows', role: 'list' }, sorted.map(item)),
-    h('button', { type: 'button', class: 'btn primary', onclick: () => supplyEditScreen(null, self) }, '+ Добавить материал')));
+    h('button', { type: 'button', class: 'btn primary', onclick: () => supplyEditScreen(null, self) }, '+ Добавить материал'),
+    // Типовой набор: карпулы, перчатки, композит… — чтобы не вбивать всё руками; что есть — не трогает
+    list.length < 10 ? h('button', {
+      type: 'button', class: 'btn',
+      onclick: async (e) => {
+        e.currentTarget.disabled = true;
+        try {
+          const { added } = await api('POST', '/api/supplies/samples');
+          haptic('success');
+          toast(added ? `✅ Добавлено материалов: ${added}` : 'Типовой набор уже на складе', null, null, 'ok');
+          self();
+        } catch (err) {
+          if (!fatal(err)) toast(errorText(err), null, null, 'bad');
+        }
+      },
+    }, 'Добавить типовой набор') : null));
 }
 
 /** Материал: списать или принять поставку на N, название и порог, история, удалить (админ). */
